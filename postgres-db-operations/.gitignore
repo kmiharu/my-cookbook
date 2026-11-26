@@ -1,0 +1,6 @@
+/logs/
+/output/
+/pgpass.conf
+/.pgpass
+/.env
+/patch_input.csv
