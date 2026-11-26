@@ -4,12 +4,9 @@ $countSql = 'sql/count.sql'
 $pageSql = 'sql/limit_offset.sql'
 $batchSize = 1000
 
-$originalClientEncoding = $env:PGCLIENTENCODING
-$originalConsoleEncoding = [Console]::OutputEncoding
-Push-Location -LiteralPath $PSScriptRoot -ErrorAction Stop
+. (Join-Path $PSScriptRoot 'lib/psql.ps1')
+$environment = Enter-PsqlEnvironment -Directory $PSScriptRoot
 try {
-    $env:PGCLIENTENCODING = 'UTF8'
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
     $psql = (Get-Command psql -CommandType Application).Source
 
     $countResult = & $psql -X -w -qAt -v ON_ERROR_STOP=1 -f $countSql
@@ -31,7 +28,5 @@ try {
         Write-Output "OFFSET=$offset 取得=$pageCount 件"
     }
 } finally {
-    $env:PGCLIENTENCODING = $originalClientEncoding
-    [Console]::OutputEncoding = $originalConsoleEncoding
-    Pop-Location
+    Restore-PsqlEnvironment -State $environment
 }

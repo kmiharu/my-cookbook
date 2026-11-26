@@ -40,6 +40,13 @@ try {
 
 スクリプトは一時的に `PGCLIENTENCODING` とコンソールの出力エンコーディングをUTF-8に設定し、終了時に戻します。事前の `chcp` は不要です。CSVと保存したJSONはUTF-8 BOMなしです。
 
+別のフォルダへ例をコピーする場合は、使う `.ps1` とSQLのほか、次の補助ファイルを `lib/` に置きます。
+
+| 使う例 | 必要な補助ファイル |
+| --- | --- |
+| 01〜03 | [psql.ps1](./lib/psql.ps1) |
+| 04〜07と分割パッチ | [psql.ps1](./lib/psql.ps1)、[log.ps1](./lib/log.ps1)。06は [csv-output.ps1](./lib/csv-output.ps1) も必要 |
+
 ## 件数と取得範囲を変える
 
 ```powershell
@@ -71,18 +78,13 @@ Get-Content -Raw -Encoding UTF8 (Join-Path $sample 'output/customer_42.json') |
 まず、1回分を標準出力で確認します。
 
 ```powershell
-$originalClientEncoding = $env:PGCLIENTENCODING
-$originalConsoleEncoding = [Console]::OutputEncoding
-Push-Location -LiteralPath $sample -ErrorAction Stop
+. (Join-Path $sample 'lib/psql.ps1')
+$environment = Enter-PsqlEnvironment -Directory $sample
 try {
-    $env:PGCLIENTENCODING = 'UTF8'
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
     psql -X -w -q -v ON_ERROR_STOP=1 -v start_date=2026-01-01 -v end_date=2026-02-01 -v batch_size=5 -v batch_offset=0 -f sql/export_stdout.sql
     if ($LASTEXITCODE -ne 0) { throw '期間指定の抽出に失敗しました。' }
 } finally {
-    [Console]::OutputEncoding = $originalConsoleEncoding
-    $env:PGCLIENTENCODING = $originalClientEncoding
-    Pop-Location
+    Restore-PsqlEnvironment -State $environment
 }
 ```
 
