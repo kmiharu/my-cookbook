@@ -1,0 +1,194 @@
+openapi: 3.0.3
+info:
+  title: 商品マスタ API
+  version: 1.0.0
+  description: |
+    DynamoDB、Aurora、Hybrid 各モードで共通。論理削除済みの商品は取得・変更できない。ID は小文字の UUID v4。
+    POST は再送するたびに新しい UUID v4 を割り当てる。採番時の衝突は最大3回まで再試行する。
+    PUT・PATCH・DELETE は現在の ETag を If-Match に指定する。
+paths:
+  /products:
+    post:
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WriteProduct' }
+      responses:
+        '201':
+          description: 商品を登録した
+          headers:
+            Location: { schema: { type: string }, example: /products/dc92220e-0996-43dd-9ceb-02ca1679934b }
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+    get:
+      operationId: listProducts
+      description: |
+        分類の完全一致。createdAt 降順、同一時刻では ID 降順。
+        DynamoDB の GSI と Hybrid の一覧には反映遅延がある。ページ横断時のスナップショットは提供しない。
+      parameters:
+        - name: category
+          in: query
+          schema: { $ref: '#/components/schemas/Category' }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: nextToken
+          in: query
+          description: 同じ DB モードと分類条件で返された不透明な継続トークン
+          schema: { type: string, minLength: 1, maxLength: 4096 }
+      responses:
+        '200':
+          description: 商品の一覧。末尾では nextToken が null
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Page' }
+        '400': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getProduct
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      operationId: replaceProduct
+      parameters:
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WriteProduct' }
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '412': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '428': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+    patch:
+      operationId: patchProduct
+      description: 送信した項目だけ変更する。空のオブジェクトと明示的な null は 400
+      parameters:
+        - { $ref: '#/components/parameters/IfMatch' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchProduct' }
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '412': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/Error' }
+        '428': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      operationId: deleteProduct
+      parameters:
+        - { $ref: '#/components/parameters/IfMatch' }
+      responses:
+        '204':
+          description: 論理削除済み。ETag は削除後の version
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
+            X-Request-Id: { $ref: '#/components/headers/RequestId' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '412': { $ref: '#/components/responses/Error' }
+        '428': { $ref: '#/components/responses/Error' }
+        default: { $ref: '#/components/responses/Error' }
+components:
+  parameters:
+    IfMatch:
+      in: header
+      name: If-Match
+      required: true
+      schema: { type: string, pattern: '^"[1-9][0-9]{0,18}"$', example: '"1"' }
+  headers:
+    ETag:
+      schema: { type: string, example: '"1"' }
+    RequestId:
+      schema: { type: string }
+  responses:
+    Product:
+      description: 商品
+      headers:
+        ETag: { $ref: '#/components/headers/ETag' }
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Product' }
+    Error:
+      description: 共通エラー
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/RequestId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Category:
+      type: string
+      pattern: '^[a-z0-9][a-z0-9-]{0,39}$'
+    PatchProduct:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        category: { $ref: '#/components/schemas/Category' }
+        priceMinor: { type: integer, minimum: 0, maximum: 999999999 }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    WriteProduct:
+      allOf:
+        - { $ref: '#/components/schemas/PatchProduct' }
+        - type: object
+          required: [name, category, priceMinor, status]
+    Product:
+      type: object
+      required: [id, name, category, priceMinor, status, version, createdAt, updatedAt, deleted]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        category: { $ref: '#/components/schemas/Category' }
+        priceMinor: { type: integer }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        version: { type: integer, format: int64, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        deleted: { type: boolean }
+    Page:
+      type: object
+      required: [items, nextToken]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Product' }
+        nextToken: { type: string, nullable: true }
+    Error:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }

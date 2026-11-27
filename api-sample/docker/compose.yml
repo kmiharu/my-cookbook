@@ -1,0 +1,76 @@
+x-app-environment: &app-environment
+  APP_RUNTIME: local
+  DATABASE_TYPE: ${DATABASE_TYPE:?set DATABASE_TYPE}
+  DYNAMODB_ENDPOINT: http://dynamodb:8000
+  DYNAMODB_TABLE: products
+  PG_JDBC_URL: jdbc:postgresql://postgres:5432/products
+  PG_USER: products
+  PG_PASSWORD: products
+  PG_POOL_SIZE: ${PG_POOL_SIZE:-4}
+  JAVA_OPTS: ${JAVA_OPTS:-}
+  AWS_ACCESS_KEY_ID: local
+  AWS_SECRET_ACCESS_KEY: local
+  AWS_REGION: us-east-1
+  AWS_EC2_METADATA_DISABLED: "true"
+  NO_PROXY: localhost,127.0.0.1,dynamodb,postgres
+  no_proxy: localhost,127.0.0.1,dynamodb,postgres
+
+services:
+  api:
+    image: ${COMPOSE_PROJECT_NAME}-products-api
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      <<: *app-environment
+      APP_ROLE: api
+    ports:
+      - "127.0.0.1:${API_PORT-8080}:8080"
+
+  dynamodb:
+    profiles: [dynamodb, hybrid]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dynamodb
+    environment:
+      JAVA_TOOL_OPTIONS: -Xms64m -Xmx512m -XX:ActiveProcessorCount=2
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "./data"]
+    working_dir: /home/dynamodblocal
+    ports:
+      - "127.0.0.1:${DYNAMODB_PORT-8000}:8000"
+    volumes:
+      - dynamodb:/home/dynamodblocal/data
+
+  postgres:
+    profiles: [aurora, hybrid]
+    image: postgres:16.14-bookworm@sha256:64154d0babcb1741988719e703419af0382b19953706149f9872fbd0f438efa8
+    environment:
+      POSTGRES_DB: products
+      POSTGRES_USER: products
+      POSTGRES_PASSWORD: products
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT-5432}:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "products", "-d", "products"]
+      interval: 1s
+      timeout: 2s
+      retries: 40
+
+  worker:
+    profiles: [hybrid]
+    image: ${COMPOSE_PROJECT_NAME}-products-api
+    entrypoint: ["java", "-cp", "/opt/api/lib/*", "cookbook.api.sync.SyncMain"]
+    command: ["worker"]
+    environment:
+      <<: *app-environment
+      APP_ROLE: sync
+      SYNC_STATE_DIR: /sync
+    volumes:
+      - sync:/sync
+
+volumes:
+  dynamodb:
+  postgres:
+  sync:

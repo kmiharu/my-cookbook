@@ -1,0 +1,14 @@
+{
+  "version": "2.0",
+  "routeKey": "ANY /products",
+  "rawPath": "/products",
+  "rawQueryString": "",
+  "headers": {"content-type": "application/json", "x-request-id": "sam-fixture"},
+  "requestContext": {
+    "requestId": "sam-fixture",
+    "stage": "$default",
+    "http": {"method": "POST", "path": "/products", "protocol": "HTTP/1.1", "sourceIp": "127.0.0.1", "userAgent": "sam"}
+  },
+  "body": "{\"name\":\"SAM ノート\",\"category\":\"sam-test\",\"priceMinor\":100,\"status\":\"ACTIVE\"}",
+  "isBase64Encoded": false
+}

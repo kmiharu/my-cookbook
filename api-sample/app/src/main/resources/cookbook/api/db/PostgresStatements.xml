@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="products">
+    <sql id="columns">
+        id, name, category, price_minor, status, version, created_at, updated_at, deleted
+    </sql>
+
+    <sql id="values">
+        CAST(#{id} AS uuid), #{name}, #{category}, #{priceMinor},
+        #{status}, #{version}, #{createdAt}, #{updatedAt}, #{deleted}
+    </sql>
+
+    <insert id="create">
+        INSERT INTO products (<include refid="columns"/>)
+        VALUES (<include refid="values"/>)
+        ON CONFLICT (id) DO NOTHING
+    </insert>
+
+    <select id="get" resultType="map">
+        SELECT <include refid="columns"/>
+        FROM products WHERE id = CAST(#{id} AS uuid)
+    </select>
+
+    <update id="replace">
+        UPDATE products
+        SET name = #{name}, category = #{category}, price_minor = #{priceMinor},
+            status = #{status}, version = #{version},
+            updated_at = #{updatedAt}, deleted = #{deleted}
+        WHERE id = CAST(#{id} AS uuid) AND version = #{expectedVersion} AND NOT deleted
+    </update>
+
+    <select id="list" resultType="map">
+        SELECT <include refid="columns"/>
+        FROM products
+        WHERE NOT deleted
+        <if test="category != null">
+            AND category = #{category}
+        </if>
+        <if test="afterId != null">
+            AND (created_at, id) &lt; (#{afterTime}, CAST(#{afterId} AS uuid))
+        </if>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <sql id="mergeProjection">
+        ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            category = EXCLUDED.category,
+            price_minor = EXCLUDED.price_minor,
+            status = EXCLUDED.status,
+            version = EXCLUDED.version,
+            created_at = EXCLUDED.created_at,
+            updated_at = EXCLUDED.updated_at,
+            deleted = EXCLUDED.deleted
+        WHERE
+            (EXCLUDED.version &gt; target.version AND (NOT target.deleted OR EXCLUDED.deleted))
+            OR (EXCLUDED.version = target.version AND EXCLUDED.deleted AND NOT target.deleted)
+    </sql>
+
+    <insert id="project">
+        INSERT INTO products AS target (<include refid="columns"/>)
+        VALUES (<include refid="values"/>)
+        <include refid="mergeProjection"/>
+    </insert>
+
+    <insert id="stage">
+        INSERT INTO products_rebuild AS target (<include refid="columns"/>)
+        VALUES (<include refid="values"/>)
+        <include refid="mergeProjection"/>
+    </insert>
+
+    <select id="searchWithCategory" resultType="map">
+        SELECT p.id, p.name, p.category, c.display_name, p.price_minor, p.status
+        FROM products p LEFT JOIN product_categories c ON p.category = c.code
+        WHERE NOT p.deleted AND p.category = #{category}
+            AND p.status = #{status} AND p.price_minor &gt;= #{minPrice}
+        ORDER BY p.created_at DESC, p.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="offset" resultType="map">
+        SELECT <include refid="columns"/>
+        FROM products WHERE NOT deleted
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+</mapper>

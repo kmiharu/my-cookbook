@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Local HTTP API v2 and DynamoDB Streams handler
+Globals:
+  Function:
+    Runtime: java21
+    Architectures: [x86_64]
+    CodeUri: ../app/build/distributions/api-lambda.zip
+    Timeout: 90
+    MemorySize: 1024
+    Environment:
+      Variables:
+        APP_RUNTIME: local
+        DATABASE_TYPE: dynamodb
+        DYNAMODB_ENDPOINT: http://dynamodb:8000
+        DYNAMODB_TABLE: products
+        PG_JDBC_URL: jdbc:postgresql://postgres:5432/products
+        PG_USER: products
+        PG_PASSWORD: products
+        PG_POOL_SIZE: "4"
+        AWS_EC2_METADATA_DISABLED: "true"
+        NO_PROXY: localhost,127.0.0.1,dynamodb,postgres
+        no_proxy: localhost,127.0.0.1,dynamodb,postgres
+Resources:
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: io.micronaut.function.aws.proxy.payload2.APIGatewayV2HTTPEventFunction
+      Environment:
+        Variables:
+          APP_ROLE: api
+      Events:
+        Root:
+          Type: HttpApi
+          Properties:
+            Path: /products
+            Method: ANY
+        Product:
+          Type: HttpApi
+          Properties:
+            Path: /products/{id}
+            Method: ANY
+  SyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: cookbook.api.sync.SyncHandler
+      Environment:
+        Variables:
+          APP_ROLE: sync
+          DATABASE_TYPE: hybrid

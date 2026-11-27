@@ -1,0 +1,14 @@
+{
+  "version": "2.0",
+  "routeKey": "ANY /products",
+  "rawPath": "/products",
+  "rawQueryString": "category=sam-test&limit=1",
+  "headers": {"accept": "application/json"},
+  "queryStringParameters": {"category": "sam-test", "limit": "1"},
+  "requestContext": {
+    "requestId": "sam-list",
+    "stage": "$default",
+    "http": {"method": "GET", "path": "/products", "protocol": "HTTP/1.1", "sourceIp": "127.0.0.1", "userAgent": "sam"}
+  },
+  "isBase64Encoded": false
+}

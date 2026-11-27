@@ -1,0 +1,18 @@
+{
+  "resource": "/products",
+  "path": "/products",
+  "httpMethod": "GET",
+  "headers": {"Accept": "application/json"},
+  "queryStringParameters": {"category": "sam-test", "limit": "1"},
+  "multiValueQueryStringParameters": {"category": ["sam-test"], "limit": ["1"]},
+  "requestContext": {
+    "requestId": "sam-rest-list",
+    "stage": "local",
+    "resourcePath": "/products",
+    "path": "/products",
+    "httpMethod": "GET",
+    "protocol": "HTTP/1.1",
+    "identity": {"sourceIp": "127.0.0.1", "userAgent": "sam"}
+  },
+  "isBase64Encoded": false
+}
