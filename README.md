@@ -6,7 +6,7 @@
 
 | できること | 使用技術 | サンプル |
 | --- | --- | --- |
-| 指定したSQLファイルでPostgreSQLのデータを抽出・更新する。CSV出力にも対応 | BAT / PowerShell / SQL | `postgres-db-operations`（追加予定） |
+| 指定したSQLファイルでPostgreSQLのデータを抽出・更新する。CSV出力にも対応 | BAT / PowerShell / SQL | [postgres-db-operations](./postgres-db-operations/) |
 
 ## ライセンス
 

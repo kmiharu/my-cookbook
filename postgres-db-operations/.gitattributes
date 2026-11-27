@@ -1,0 +1,3 @@
+*.bat -text whitespace=cr-at-eol
+*.csv text eol=lf
+*.sql text eol=lf
