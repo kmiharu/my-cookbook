@@ -93,8 +93,8 @@ jq -e --arg value "$value" '
   .clientToken == .startedBy and (.startedBy | test("^[0-9a-f-]{36}$")) and
   .overrides.containerOverrides == [{name:"batch",command:["job=CustomerExport","runId=run-123",$value],environment:[{name:"BATCH_EXECUTION_OWNER",value:.startedBy}]}]
 ' "$test_dir/request.json" >/dev/null
-rg -q 'taskDefinition=.*:42 image=.*@sha256:' "$test_dir/output"
-rg -q '"lastStatus":"STOPPED"' "$test_dir/output"
+grep -q 'taskDefinition=.*:42 image=.*@sha256:' "$test_dir/output"
+grep -Fq '"lastStatus":"STOPPED"' "$test_dir/output"
 verify_exit rejected 69 job=CustomerExport runId=r
 verify_exit failed 17 job=CustomerExport runId=r
 verify_exit missing 70 job=CustomerExport runId=r
