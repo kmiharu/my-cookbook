@@ -1,0 +1,61 @@
+[
+  {
+    "name": "ch.qos.logback.classic.Logger",
+    "queriedMethods": [
+      {
+        "name": "log",
+        "parameterTypes": [
+          "org.slf4j.Marker", "java.lang.String", "int", "java.lang.String",
+          "java.lang.Object[]", "java.lang.Throwable"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl",
+    "methods": [{"name": "<init>", "parameterTypes": []}]
+  },
+  {
+    "name": "com.sun.org.apache.xerces.internal.jaxp.SAXParserFactoryImpl",
+    "methods": [{"name": "<init>", "parameterTypes": []}]
+  },
+  {"name": "com.zaxxer.hikari.HikariConfig", "allDeclaredFields": true},
+  {"name": "com.zaxxer.hikari.pool.PoolBase", "fields": [{"name": "catalog"}]},
+  {"name": "com.zaxxer.hikari.pool.PoolEntry", "fields": [{"name": "state"}]},
+  {
+    "name": "java.util.ArrayList",
+    "methods": [{"name": "<init>", "parameterTypes": []}]
+  },
+  {
+    "name": "java.util.HashMap",
+    "methods": [{"name": "<init>", "parameterTypes": []}]
+  },
+  {"name": "org.apache.ibatis.javassist.ClassPool"},
+  {"name": "org.apache.ibatis.javassist.util.proxy.ProxyFactory"},
+  {
+    "name": "org.apache.ibatis.logging.slf4j.Slf4jImpl",
+    "methods": [{"name": "<init>", "parameterTypes": ["java.lang.String"]}]
+  },
+  {
+    "name": "org.apache.ibatis.logging.nologging.NoLoggingImpl",
+    "methods": [{"name": "<init>", "parameterTypes": ["java.lang.String"]}]
+  },
+  {
+    "name": "org.apache.ibatis.ognl.OgnlRuntime$ClassPropertyMethodCache",
+    "methods": [{"name": "get", "parameterTypes": ["java.lang.Class", "java.lang.String"]}]
+  },
+  {
+    "name": "org.apache.ibatis.scripting.xmltags.XMLLanguageDriver",
+    "methods": [{"name": "<init>", "parameterTypes": []}]
+  },
+  {
+    "name": "org.apache.ibatis.scripting.defaults.RawLanguageDriver",
+    "methods": [{"name": "<init>", "parameterTypes": []}]
+  },
+  {"name": "org.postgresql.Driver"},
+  {"name": "org.postgresql.core.QueryExecutorCloseAction", "fields": [{"name": "pgStream"}]},
+  {
+    "name": "org.postgresql.jdbc.PgStatement",
+    "fields": [{"name": "cancelTimerTask"}, {"name": "isClosed"}, {"name": "statementState"}]
+  }
+]
