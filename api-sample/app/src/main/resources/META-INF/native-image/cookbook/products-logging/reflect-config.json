@@ -1,0 +1,9 @@
+[
+  {
+    "name": "ch.qos.logback.classic.encoder.JsonEncoder",
+    "methods": [
+      { "name": "<init>", "parameterTypes": [] },
+      { "name": "setWithFormattedMessage", "parameterTypes": ["boolean"] }
+    ]
+  }
+]

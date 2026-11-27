@@ -1,0 +1,27 @@
+# 手動で有効化する場合に限り .github/workflows/ に配置する。
+name: API sample local verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: api-sample
+    env:
+      SAM_CLI_TELEMETRY: '0'
+      CHECKPOINT_DISABLE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21.0.13+9'
+      - name: Verify API, sync, Lambda entry points and Terraform
+        run: make verify

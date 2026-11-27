@@ -1,0 +1,9 @@
+**
+!app/
+!app/build/
+!app/build/install/
+!app/build/install/products-api/
+!app/build/install/products-api/**
+!docker/
+!docker/Dockerfile
+!docker/Dockerfile.dynamodb
