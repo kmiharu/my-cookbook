@@ -1,0 +1,445 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cookbook.batch.examples.operations.OperationsMapper">
+  <resultMap id="customerRow" type="cookbook.batch.examples.operations.OperationModels$CustomerRow">
+    <constructor>
+      <arg column="id" javaType="_long"/>
+      <arg column="name" javaType="string"/>
+      <arg column="email" javaType="string"/>
+      <arg column="status" javaType="string"/>
+      <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+      <arg column="version" javaType="_long"/>
+      <arg column="detail" javaType="string"/>
+    </constructor>
+  </resultMap>
+
+  <resultMap id="patchPlan" type="cookbook.batch.examples.operations.OperationModels$PatchPlan">
+    <constructor>
+      <arg column="patch_id" javaType="string"/>
+      <arg column="plan_id" javaType="string"/>
+      <arg column="state" javaType="string"/>
+      <arg column="definition" javaType="string"/>
+      <arg column="expected_rows" javaType="_long"/>
+      <arg column="preview_run" javaType="string"/>
+      <arg column="apply_run" javaType="string"/>
+      <arg column="restore_run" javaType="string"/>
+      <arg column="mode" javaType="string"/>
+    </constructor>
+  </resultMap>
+
+  <resultMap id="patchRow" type="cookbook.batch.examples.operations.OperationModels$PatchRow">
+    <constructor>
+      <arg column="id" javaType="_long"/>
+      <arg column="old_status" javaType="string"/>
+      <arg column="new_status" javaType="string"/>
+      <arg column="old_version" javaType="_long"/>
+      <arg column="applied_version" javaType="long"/>
+      <arg column="restored_version" javaType="long"/>
+    </constructor>
+  </resultMap>
+
+  <resultMap id="watermark" type="cookbook.batch.examples.operations.OperationModels$Watermark">
+    <constructor>
+      <arg column="watermark_id" javaType="string"/>
+      <arg column="lower_bound" javaType="java.time.OffsetDateTime"/>
+      <arg column="upper_bound" javaType="java.time.OffsetDateTime"/>
+    </constructor>
+  </resultMap>
+
+  <sql id="scope">
+    c.id BETWEEN #{scope.idFrom} AND #{scope.idTo}
+    AND c.updated_at &gt;= #{scope.from} AND c.updated_at &lt; #{scope.to}
+    <if test="scope.status != null">AND c.status = #{scope.status}</if>
+  </sql>
+
+  <insert id="freeze">
+    INSERT INTO batch_operation_work (job_name, run_id, id, name, email, status, updated_at, version)
+    SELECT #{scope.run.job}, #{scope.run.runId}, c.id, c.name, c.email, c.status, c.updated_at, c.version
+    FROM customer c
+    WHERE <include refid="scope"/>
+    ORDER BY c.id LIMIT #{limit}
+  </insert>
+
+  <update id="transform">
+    UPDATE batch_operation_work
+    SET name = trim(name), email = lower(trim(email)), detail = 'NORMALIZED'
+    WHERE job_name = #{job} AND run_id = #{runId}
+  </update>
+
+  <insert id="freezeStatus">
+    INSERT INTO batch_operation_work (job_name, run_id, id, name, email, status, updated_at, version, detail)
+    SELECT #{scope.run.job}, #{scope.run.runId}, c.id, c.name, c.email, c.status, c.updated_at, c.version,
+           #{scope.targetStatus}
+    FROM customer c
+    WHERE <include refid="scope"/> AND c.status IS DISTINCT FROM #{scope.targetStatus}
+    ORDER BY c.id LIMIT #{limit}
+  </insert>
+
+  <insert id="freezeBackfill">
+    INSERT INTO batch_operation_work (job_name, run_id, id, name, email, status, updated_at, version, detail)
+    SELECT #{scope.run.job}, #{scope.run.runId}, c.id, c.name, c.email, c.status, c.updated_at, c.version,
+           'customer-' || c.id || '@example.invalid'
+    FROM customer c
+    WHERE <include refid="scope"/>
+      AND c.email IS DISTINCT FROM ('customer-' || c.id || '@example.invalid')
+      <if test="!recalculate">AND (c.email IS NULL OR c.email = '')</if>
+    ORDER BY c.id LIMIT #{limit}
+  </insert>
+
+  <sql id="ids">
+    <if test="ids != null">
+      AND w.id IN
+      <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </if>
+  </sql>
+
+  <select id="updateStatus" resultType="_long" affectData="true" flushCache="true">
+    WITH changed AS (
+      UPDATE customer c
+      SET status = w.detail, version = c.version + 1, updated_at = statement_timestamp()
+      FROM batch_operation_work w
+      WHERE w.job_name = #{run.job} AND w.run_id = #{run.runId} AND NOT w.applied
+        AND c.id = w.id AND c.version = w.version AND c.status = w.status <include refid="ids"/>
+      RETURNING c.id
+    ), recorded AS (
+      UPDATE batch_operation_work w
+      SET applied = true
+      FROM changed
+      WHERE w.job_name = #{run.job} AND w.run_id = #{run.runId} AND w.id = changed.id
+      RETURNING w.id
+    )
+    SELECT count(*) FROM recorded
+  </select>
+
+  <select id="updateEmail" resultType="_long" affectData="true" flushCache="true">
+    WITH changed AS (
+      UPDATE customer c
+      SET email = w.detail, version = c.version + 1, updated_at = statement_timestamp()
+      FROM batch_operation_work w
+      WHERE w.job_name = #{run.job} AND w.run_id = #{run.runId} AND NOT w.applied
+        AND c.id = w.id AND c.version = w.version AND c.email IS NOT DISTINCT FROM w.email <include refid="ids"/>
+      RETURNING c.id
+    ), recorded AS (
+      UPDATE batch_operation_work w
+      SET applied = true
+      FROM changed
+      WHERE w.job_name = #{run.job} AND w.run_id = #{run.runId} AND w.id = changed.id
+      RETURNING w.id
+    )
+    SELECT count(*) FROM recorded
+  </select>
+
+  <select id="countApplied" resultType="_long">
+    SELECT count(*) FROM batch_operation_work
+    WHERE job_name = #{job} AND run_id = #{runId} AND applied
+  </select>
+
+  <select id="lockArchiveCustomers" resultType="_long" useCache="false">
+    SELECT count(*) FROM (
+      SELECT c.id FROM batch_operation_work w JOIN customer c ON c.id = w.id
+      WHERE w.job_name = #{job} AND w.run_id = #{runId} AND NOT w.applied
+      ORDER BY c.id FOR UPDATE OF c
+    ) AS locked
+  </select>
+
+  <select id="countArchivedMemberships" resultType="_long" useCache="false">
+    SELECT count(*) FROM batch_operation_work w JOIN membership m ON m.customer_id = w.id
+    WHERE w.job_name = #{job} AND w.run_id = #{runId} AND NOT w.applied
+  </select>
+
+  <select id="countWork" resultType="_long">
+    SELECT count(*) FROM batch_operation_work WHERE job_name = #{job} AND run_id = #{runId}
+  </select>
+
+  <select id="countKind" resultType="_long">
+    SELECT count(*) FROM batch_operation_work WHERE job_name = #{run.job} AND run_id = #{run.runId} AND detail = #{kind}
+  </select>
+
+  <select id="operationIds" resultType="long">
+    SELECT id FROM batch_operation_work
+    WHERE job_name = #{run.job} AND run_id = #{run.runId} AND id &gt; #{after}
+    ORDER BY id LIMIT #{limit}
+  </select>
+
+  <select id="operationPage" resultMap="customerRow">
+    SELECT id, name, email, status, updated_at, version, detail FROM batch_operation_work
+    WHERE job_name = #{run.job} AND run_id = #{run.runId} AND id &gt; #{after}
+    ORDER BY id LIMIT #{limit}
+  </select>
+
+  <select id="streamWork" resultMap="customerRow" resultSetType="FORWARD_ONLY" fetchSize="1000" useCache="false">
+    SELECT id, name, email, status, updated_at, version, detail FROM batch_operation_work
+    WHERE job_name = #{run.job} AND run_id = #{run.runId}
+    ORDER BY id
+  </select>
+
+  <select id="lockAggregation" resultType="_long" useCache="false">
+    SELECT 1::bigint FROM pg_advisory_xact_lock(hashtext('operation-aggregation-' || #{period})::bigint)
+  </select>
+
+  <delete id="clearAggregation">
+    DELETE FROM batch_customer_totals
+    WHERE period = #{period} AND bucket_date &gt;= #{from} AND bucket_date &lt; #{to}
+  </delete>
+
+  <insert id="writeAggregation">
+    INSERT INTO batch_customer_totals (period, bucket_date, status, customer_count)
+    SELECT #{period}, date_trunc(#{period}, updated_at AT TIME ZONE 'UTC')::date, status, count(*)
+    FROM customer
+    WHERE updated_at &gt;= (CAST(#{from} AS date)::timestamp AT TIME ZONE 'UTC')
+      AND updated_at &lt; (CAST(#{to} AS date)::timestamp AT TIME ZONE 'UTC')
+    GROUP BY 2, 3
+  </insert>
+
+  <select id="countInputs" resultType="_long">
+    SELECT count(*) FROM batch_input_work WHERE job_name = #{job} AND run_id = #{runId}
+  </select>
+
+  <select id="countInputFiles" resultType="_long">
+    SELECT count(*) FROM batch_input WHERE job_name = #{job} AND run_id = #{runId}
+  </select>
+
+  <select id="countInputErrors" resultType="_long">
+    SELECT count(*) FROM batch_input_error WHERE job_name = #{job} AND run_id = #{runId}
+  </select>
+
+  <select id="countValidatedInputRows" resultType="_long">
+    SELECT coalesce(sum(row_count), 0)::bigint FROM batch_input_check
+    WHERE job_name = #{job} AND run_id = #{runId}
+  </select>
+
+  <insert id="claimInput">
+    INSERT INTO batch_input_applied (consumer, bucket, object_key, revision, run_id)
+    SELECT #{job}, bucket, object_key, coalesce(version_id, etag), #{runId}
+    FROM batch_input WHERE job_name = #{job} AND run_id = #{runId}
+    ON CONFLICT DO NOTHING
+  </insert>
+
+  <insert id="freezeDeletes">
+    INSERT INTO batch_operation_work (job_name, run_id, id, name, email, status, updated_at, version)
+    SELECT #{scope.run.job}, #{scope.run.runId}, c.id, c.name, c.email, c.status, c.updated_at, c.version
+    FROM batch_input_work i
+    JOIN customer c ON c.id = i.customer_id AND c.version = i.expected_version
+    WHERE i.job_name = #{scope.run.job} AND i.run_id = #{scope.run.runId}
+    ORDER BY c.id LIMIT #{limit}
+  </insert>
+
+  <select id="deleteFrozen" resultType="_long" affectData="true" flushCache="true">
+    WITH deleted AS (
+      DELETE FROM customer c
+      USING batch_operation_work w
+      WHERE w.job_name = #{run.job} AND w.run_id = #{run.runId} AND NOT w.applied
+        AND c.id = w.id AND c.version = w.version AND c.status = w.status
+        AND c.email IS NOT DISTINCT FROM w.email AND c.name = w.name AND c.updated_at = w.updated_at
+      <if test="reconciled">AND w.detail = 'MISSING'</if>
+      RETURNING c.id
+    ), recorded AS (
+      UPDATE batch_operation_work w
+      SET applied = true
+      FROM deleted
+      WHERE w.job_name = #{run.job} AND w.run_id = #{run.runId} AND w.id = deleted.id
+      RETURNING w.id
+    )
+    SELECT count(*) FROM recorded
+  </select>
+
+  <insert id="freezeReconciliation">
+    WITH input AS (
+      SELECT customer_id, name, email, status
+      FROM batch_input_work WHERE job_name = #{scope.run.job} AND run_id = #{scope.run.runId}
+    )
+    INSERT INTO batch_operation_work (job_name, run_id, id, name, email, status, updated_at, version, detail)
+    SELECT #{scope.run.job}, #{scope.run.runId}, coalesce(i.customer_id, c.id),
+      CASE WHEN i.customer_id IS NULL THEN c.name ELSE i.name END,
+      CASE WHEN i.customer_id IS NULL THEN c.email ELSE i.email END,
+      CASE WHEN i.customer_id IS NULL THEN c.status ELSE i.status END,
+      coalesce(c.updated_at, transaction_timestamp()), coalesce(c.version, 0),
+      CASE WHEN i.customer_id IS NULL THEN 'MISSING' WHEN c.id IS NULL THEN 'NEW' ELSE 'CHANGED' END
+    FROM input i FULL JOIN customer c ON c.id = i.customer_id
+    WHERE i.customer_id IS NULL OR c.id IS NULL OR
+          (i.name, i.email, i.status) IS DISTINCT FROM (c.name, c.email, c.status)
+    ORDER BY 3 LIMIT #{limit}
+  </insert>
+
+  <insert id="insertReconciled">
+    INSERT INTO customer (id, name, email, status, version)
+    SELECT id, name, email, status, 1
+    FROM batch_operation_work WHERE job_name = #{job} AND run_id = #{runId} AND detail = 'NEW'
+    ORDER BY id
+    ON CONFLICT (id) DO NOTHING
+  </insert>
+
+  <update id="updateReconciled">
+    UPDATE customer c
+    SET name = w.name, email = w.email, status = w.status, version = c.version + 1, updated_at = statement_timestamp()
+    FROM batch_operation_work w
+    WHERE w.job_name = #{job} AND w.run_id = #{runId} AND w.detail = 'CHANGED'
+      AND c.id = w.id AND c.version = w.version
+  </update>
+
+  <insert id="createPatch">
+    INSERT INTO batch_patch_plan (plan_id, patch_id, preview_run, definition, expected_rows, state)
+    VALUES (#{request.planId}, #{request.patchId}, #{request.scope.run.runId}, #{request.definition}, 0, 'PREVIEWED')
+    ON CONFLICT (plan_id) DO NOTHING
+  </insert>
+
+  <insert id="freezePatch">
+    INSERT INTO batch_patch_row (plan_id, id, old_status, new_status, old_version)
+    SELECT #{request.planId}, c.id, c.status, #{request.scope.targetStatus}, c.version
+    FROM customer c
+    WHERE c.id BETWEEN #{request.scope.idFrom} AND #{request.scope.idTo}
+      AND c.updated_at &gt;= #{request.scope.from} AND c.updated_at &lt; #{request.scope.to}
+      AND c.status IS DISTINCT FROM #{request.scope.targetStatus}
+      <if test="request.scope.status != null">AND c.status = #{request.scope.status}</if>
+    ORDER BY c.id LIMIT #{limit}
+  </insert>
+
+  <update id="setPatchCount">
+    UPDATE batch_patch_plan SET expected_rows = #{count} WHERE plan_id = #{planId}
+  </update>
+
+  <select id="lockPatch" resultMap="patchPlan" useCache="false">
+    SELECT patch_id, plan_id, state, definition, expected_rows, preview_run, apply_run, restore_run, mode
+    FROM batch_patch_plan WHERE plan_id = #{planId} FOR UPDATE
+  </select>
+
+  <insert id="claimPatch">
+    INSERT INTO batch_patch_claim (patch_id, plan_id) VALUES (#{patchId}, #{planId})
+    ON CONFLICT (patch_id) DO NOTHING
+  </insert>
+
+  <update id="startApply">
+    UPDATE batch_patch_plan SET state = 'APPLYING', apply_run = #{runId}, mode = #{mode}
+    WHERE plan_id = #{planId} AND state = 'PREVIEWED'
+  </update>
+
+  <update id="startRestore">
+    UPDATE batch_patch_plan SET state = 'RESTORING', restore_run = #{runId}, mode = #{mode}
+    WHERE plan_id = #{planId} AND state = 'APPLIED'
+  </update>
+
+  <select id="patchIds" resultType="long">
+    SELECT id FROM batch_patch_row
+    WHERE plan_id = #{planId} AND id &gt; #{after}
+    ORDER BY id LIMIT #{limit}
+  </select>
+
+  <select id="applyPatch" resultType="_long" affectData="true" flushCache="true">
+    WITH changed AS (
+      UPDATE customer c
+      SET status = w.new_status, version = c.version + 1, updated_at = statement_timestamp()
+      FROM batch_patch_row w
+      WHERE w.plan_id = #{planId} AND w.applied_version IS NULL
+        AND c.id = w.id AND c.version = w.old_version AND c.status = w.old_status <include refid="ids"/>
+      RETURNING c.id, c.version, c.status
+    ), recorded AS (
+      UPDATE batch_patch_row w
+      SET applied_version = changed.version
+      FROM changed WHERE w.plan_id = #{planId} AND w.id = changed.id
+        AND changed.status = w.new_status AND changed.version = w.old_version + 1
+      RETURNING w.id
+    )
+    SELECT count(*) FROM recorded
+  </select>
+
+  <select id="restorePatch" resultType="_long" affectData="true" flushCache="true">
+    WITH changed AS (
+      UPDATE customer c
+      SET status = w.old_status, version = c.version + 1, updated_at = statement_timestamp()
+      FROM batch_patch_row w
+      WHERE w.plan_id = #{planId} AND w.restored_version IS NULL
+        AND c.id = w.id AND c.version = w.applied_version AND c.status = w.new_status <include refid="ids"/>
+      RETURNING c.id, c.version, c.status
+    ), recorded AS (
+      UPDATE batch_patch_row w
+      SET restored_version = changed.version
+      FROM changed WHERE w.plan_id = #{planId} AND w.id = changed.id
+        AND changed.status = w.old_status AND changed.version = w.applied_version + 1
+      RETURNING w.id
+    )
+    SELECT count(*) FROM recorded
+  </select>
+
+  <select id="patchResultCount" resultType="_long">
+    SELECT count(*) FROM batch_patch_row
+    WHERE plan_id = #{planId}
+      <choose><when test="restore">AND restored_version IS NOT NULL</when>
+        <otherwise>AND applied_version IS NOT NULL</otherwise></choose>
+  </select>
+
+  <update id="finishPatch">
+    UPDATE batch_patch_plan SET state = #{state}
+    WHERE plan_id = #{planId} AND state = #{previous}
+  </update>
+
+  <select id="streamPatch" resultMap="patchRow" resultSetType="FORWARD_ONLY" fetchSize="1000" useCache="false">
+    SELECT id, old_status, new_status, old_version, applied_version, restored_version
+    FROM batch_patch_row WHERE plan_id = #{planId}
+    ORDER BY id
+  </select>
+
+  <select id="lockCleanup" resultType="_long" useCache="false">
+    SELECT 1::bigint FROM pg_advisory_xact_lock(hashtext('operation-cleanup')::bigint)
+  </select>
+
+  <sql id="expiredCompletedRuns">
+    r.state = 'COMPLETED'
+      AND r.updated_at &lt; transaction_timestamp() - CAST(#{days} AS int) * interval '1 day'
+      AND (r.job_name, r.run_id) &lt;&gt; (#{run.job}, #{run.runId})
+  </sql>
+
+  <sql id="cleanupRuns">
+    w.job_name = r.job_name AND w.run_id = r.run_id AND <include refid="expiredCompletedRuns"/>
+  </sql>
+
+  <delete id="cleanWork">
+    DELETE FROM batch_operation_work w USING batch_run r WHERE <include refid="cleanupRuns"/>
+  </delete>
+
+  <delete id="cleanOutputWork">
+    DELETE FROM batch_customer_export w USING batch_run r WHERE <include refid="cleanupRuns"/>
+  </delete>
+
+  <delete id="cleanInputWork">
+    DELETE FROM batch_input_work w USING batch_run r WHERE <include refid="cleanupRuns"/>
+  </delete>
+
+  <delete id="cleanCopyWork">
+    DELETE FROM batch_copy_stage w USING batch_run r WHERE <include refid="cleanupRuns"/>
+  </delete>
+
+  <delete id="cleanDynamoWork">
+    DELETE FROM dynamo_work w USING batch_run r
+    WHERE w.run_key = (r.job_name || ':' || r.run_id) AND <include refid="expiredCompletedRuns"/>
+  </delete>
+
+  <insert id="recordCleanup">
+    INSERT INTO batch_operation_cleanup (job_name, run_id, removed_rows)
+    VALUES (#{run.job}, #{run.runId}, #{count})
+  </insert>
+
+  <select id="clock" resultType="java.time.OffsetDateTime">SELECT clock_timestamp()</select>
+
+  <insert id="createWatermark">
+    INSERT INTO batch_watermark (watermark_id, next_lower) VALUES (#{id}, #{first})
+    ON CONFLICT (watermark_id) DO NOTHING
+  </insert>
+
+  <select id="lockWatermark" resultType="java.time.OffsetDateTime" useCache="false">
+    SELECT next_lower FROM batch_watermark WHERE watermark_id = #{value} FOR UPDATE
+  </select>
+
+  <insert id="createWatermarkRun">
+    INSERT INTO batch_watermark_run (job_name, run_id, watermark_id, lower_bound, upper_bound)
+    VALUES (#{run.job}, #{run.runId}, #{bounds.id}, #{bounds.lower}, #{bounds.upper})
+  </insert>
+
+  <select id="watermarkRun" resultMap="watermark">
+    SELECT watermark_id, lower_bound, upper_bound FROM batch_watermark_run
+    WHERE job_name = #{job} AND run_id = #{runId}
+  </select>
+
+  <update id="advanceWatermark">
+    UPDATE batch_watermark SET next_lower = #{upper} WHERE watermark_id = #{id} AND next_lower &lt; #{upper}
+  </update>
+</mapper>

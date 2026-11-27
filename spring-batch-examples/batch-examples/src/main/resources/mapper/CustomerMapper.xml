@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cookbook.batch.examples.CustomerMapper">
+    <select id="selectCustomers" resultType="cookbook.batch.examples.CustomerRow" resultSetType="FORWARD_ONLY" useCache="false">
+        SELECT id AS customer_id, 0::bigint AS member_id, name, email, status,
+               updated_at, version, NULL::text AS tier
+        FROM customer
+        <where>
+            <if test="fromDate != null">AND updated_at &gt;= #{fromDate}</if>
+            <if test="toDate != null">AND updated_at &lt; #{toDate}</if>
+            <if test="status != null">AND status = #{status}</if>
+        </where>
+        ORDER BY id
+    </select>
+    <sql id="snapshotConditions">
+        <where>
+            <if test="conditions.fromDate != null">AND c.updated_at &gt;= #{conditions.fromDate}</if>
+            <if test="conditions.toDate != null">AND c.updated_at &lt; #{conditions.toDate}</if>
+            <if test="conditions.status != null">AND c.status = #{conditions.status}</if>
+        </where>
+    </sql>
+    <insert id="snapshot">
+        INSERT INTO batch_customer_export
+        SELECT #{job}, #{run}, #{artifact}, c.id, 0, c.name, c.email, c.status, c.updated_at, c.version, NULL
+        FROM customer c
+        <include refid="snapshotConditions"/>
+    </insert>
+    <insert id="snapshotImported">
+        INSERT INTO batch_customer_export
+        SELECT #{job},#{run},'customers',c.id,0,c.name,c.email,c.status,c.updated_at,c.version,NULL
+        FROM customer c JOIN batch_input_work w ON w.customer_id=c.id
+        WHERE w.job_name=#{job} AND w.run_id=#{run}
+    </insert>
+    <insert id="promoteCopyRows">
+        INSERT INTO batch_input_work
+            (job_name,run_id,file_index,ordinal,customer_id,name,email,status,expected_version)
+        SELECT s.job_name,s.run_id,0,s.ordinal,s.id_text::bigint,s.name,s.email,s.status,c.version
+        FROM batch_copy_stage s LEFT JOIN customer c ON c.id=s.id_text::bigint
+        WHERE s.job_name=#{job} AND s.run_id=#{run}
+    </insert>
+    <insert id="snapshotMembers">
+        INSERT INTO batch_customer_export
+        SELECT #{job}, #{run}, 'customer-members', c.id, COALESCE(m.member_id,0),
+               c.name, c.email, c.status, c.updated_at, c.version, m.tier
+        FROM customer c LEFT JOIN membership m ON m.customer_id=c.id
+        <include refid="snapshotConditions"/>
+    </insert>
+    <select id="selectWork" resultType="cookbook.batch.examples.CustomerRow" resultSetType="FORWARD_ONLY" useCache="false">
+        SELECT customer_id, member_id, name, email, status, updated_at, version, tier
+        FROM batch_customer_export
+        WHERE job_name=#{job} AND run_id=#{run} AND artifact=#{artifact}
+          AND customer_id BETWEEN #{low} AND #{high}
+        ORDER BY customer_id, member_id
+    </select>
+    <select id="selectErrors" resultType="cookbook.batch.examples.CustomerMapper$InputError" resultSetType="FORWARD_ONLY" useCache="false">
+        SELECT file_index, ordinal, reason
+        FROM batch_input_error WHERE job_name=#{job} AND run_id=#{run}
+        ORDER BY file_index, ordinal
+    </select>
+    <insert id="stage">
+        INSERT INTO batch_input_work
+            (job_name, run_id, file_index, ordinal, customer_id, name, email, status, expected_version)
+        VALUES (#{job}, #{run}, #{fileIndex}, #{ordinal}, #{customerId}, #{name}, #{email}, #{status},
+                COALESCE(#{expectedVersion,jdbcType=BIGINT}, (SELECT version FROM customer WHERE id=#{customerId})))
+    </insert>
+    <insert id="insert">
+        INSERT INTO customer (id,name,email,status) VALUES (#{customerId},#{name},#{email},#{status})
+    </insert>
+    <insert id="error">
+        INSERT INTO batch_input_error (job_name,run_id,file_index,ordinal,reason)
+        VALUES (#{job},#{run},#{fileIndex},#{ordinal},#{error})
+        ON CONFLICT (job_name,run_id,file_index,ordinal) DO NOTHING
+    </insert>
+    <select id="upsert" resultType="long" affectData="true" flushCache="true">
+        WITH changed AS (
+            UPDATE customer c SET name=w.name,email=w.email,status=w.status,
+                version=c.version + CASE WHEN (c.name,c.email,c.status) IS DISTINCT FROM
+                    (w.name,w.email,w.status) THEN 1 ELSE 0 END,
+                updated_at=CASE WHEN (c.name,c.email,c.status) IS DISTINCT FROM
+                    (w.name,w.email,w.status) THEN clock_timestamp() ELSE c.updated_at END
+            FROM batch_input_work w
+            WHERE w.job_name=#{job} AND w.run_id=#{run} AND c.id=w.customer_id AND c.version=w.expected_version
+            RETURNING c.id
+        ), added AS (
+            INSERT INTO customer(id,name,email,status)
+            SELECT customer_id,name,email,status FROM batch_input_work
+            WHERE job_name=#{job} AND run_id=#{run} AND expected_version IS NULL
+            ORDER BY customer_id
+            ON CONFLICT (id) DO NOTHING RETURNING id
+        )
+        SELECT (SELECT count(*) FROM changed) + (SELECT count(*) FROM added)
+    </select>
+    <insert id="seed">
+        INSERT INTO customer (id,name,email,status,updated_at,version)
+        SELECT id,
+               'customer-' || id || '-' || substring(
+                   md5((id * 17 + #{seed})::text) || md5((id * 19 + #{seed})::text)
+                   || repeat(md5((id * 23 + #{seed})::text),128),1,#{width}-48),
+               CASE WHEN id % 10 = 0 THEN NULL ELSE id || '@example.test' END,
+               CASE WHEN id % 10 = 0 THEN 'INACTIVE' ELSE 'ACTIVE' END,
+               TIMESTAMPTZ '2026-01-01 00:00:00+00' + (id % 86400) * INTERVAL '1 second',0
+        FROM generate_series(#{start}::bigint,#{end}::bigint) AS id
+        ON CONFLICT (id) DO NOTHING
+    </insert>
+</mapper>

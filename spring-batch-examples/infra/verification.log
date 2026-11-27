@@ -1,0 +1,100 @@
+Checking bootstrap
+Initializing provider plugins...
+- Reusing version 6.74.0 of hashicorp/aws from the dependency lock file
+- Using hashicorp/aws v6.74.0 from the shared cache directory
+
+Terraform has been successfully initialized!
+Success! The configuration is valid.
+
+tests/backend.tftest.hcl... in progress
+  run "locked_state_bucket"... pass
+tests/backend.tftest.hcl... tearing down
+tests/backend.tftest.hcl... pass
+
+Success! 1 passed, 0 failed.
+Checking existing
+Initializing modules...
+- task in ../modules/task
+
+Initializing provider plugins...
+- Reusing version 6.74.0 of hashicorp/aws from the dependency lock file
+- Using hashicorp/aws v6.74.0 from the shared cache directory
+
+Terraform has been successfully initialized!
+Success! The configuration is valid.
+
+tests/task.tftest.hcl... in progress
+  run "existing_direct_recipient"... pass
+  run "existing_sts_recipient"... pass
+  run "creates_repository_before_first_image"... pass
+  run "separate_target_secret"... pass
+tests/task.tftest.hcl... tearing down
+tests/task.tftest.hcl... pass
+
+Success! 4 passed, 0 failed.
+Checking new
+Initializing modules...
+- task in ../modules/task
+- network_db in ../modules/network-db
+- data in ../modules/data
+
+Initializing provider plugins...
+- Reusing version 6.74.0 of hashicorp/aws from the dependency lock file
+- Using hashicorp/aws v6.74.0 from the shared cache directory
+
+Terraform has been successfully initialized!
+Success! The configuration is valid.
+
+tests/stack.tftest.hcl... in progress
+  run "new_private_stack"... pass
+tests/stack.tftest.hcl... tearing down
+tests/stack.tftest.hcl... pass
+
+Success! 1 passed, 0 failed.
+Checking partner-policy
+Initializing provider plugins...
+- Reusing version 6.74.0 of hashicorp/aws from the dependency lock file
+- Using hashicorp/aws v6.74.0 from the shared cache directory
+
+Terraform has been successfully initialized!
+Success! The configuration is valid.
+
+tests/policies.tftest.hcl... in progress
+  run "direct_access_statements"... pass
+  run "recipient_role"... pass
+tests/policies.tftest.hcl... tearing down
+tests/policies.tftest.hcl... pass
+
+Success! 2 passed, 0 failed.
+Checking modules/task
+Initializing provider plugins...
+- Reusing version 6.74.0 of hashicorp/aws from the dependency lock file
+- Using hashicorp/aws v6.74.0 from the shared cache directory
+
+Terraform has been successfully initialized!
+Success! The configuration is valid.
+
+Checking modules/data
+Initializing provider plugins...
+- Reusing version 6.74.0 of hashicorp/aws from the dependency lock file
+- Using hashicorp/aws v6.74.0 from the shared cache directory
+
+Terraform has been successfully initialized!
+Success! The configuration is valid.
+
+Checking modules/network-db
+Initializing provider plugins...
+- Reusing version 6.74.0 of hashicorp/aws from the dependency lock file
+- Using hashicorp/aws v6.74.0 from the shared cache directory
+
+Terraform has been successfully initialized!
+Success! The configuration is valid.
+
+PASS success
+PASS rejected
+PASS failed
+PASS missing
+PASS oom
+PASS start_failed
+PASS timeout
+PASS duplicate

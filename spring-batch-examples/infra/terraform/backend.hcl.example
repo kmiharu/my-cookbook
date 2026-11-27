@@ -1,0 +1,4 @@
+bucket = "111111111111-cookbook-terraform-state"
+key    = "cookbook/sandbox/terraform.tfstate"
+region = "us-east-1"
+# Keep a separate key/account for each root, including the partner.

@@ -1,0 +1,40 @@
+# 固定した入力から同じrunを再開する
+
+## 実行の所有権とチェックポイントを確認する
+
+Job名とrunIdがSpring BatchのJobInstanceを決めます。試行ごとにJobExecutionが追加されます。ワーク、入力、成果物、パッチの台帳はPostgreSQLにあり、アプリコンテナを再作成しても引き継がれます。起動時に解決済み設定、ルーティング、コードとSQLの指紋を照合します。処理途中のrunは最初に使ったJARまたはイメージで再開します。秘密は外部設定と標準認証チェーンに置きます。
+
+同じJob/runのPostgreSQL advisory lockを専用接続で取得します。接続が切れた場合にも、台帳のACTIVE所有者を確認します。SIGTERMで停止した実行は入力のコミット境界から再開します。SIGKILLやヒープ枯渇でACTIVEのままなら、Dockerの状態またはECSのDescribeTasksで旧所有者が停止したことを確認し、Batch台帳の実行IDと所有者を渡します。
+
+```bash
+docker inspect "$old_container" --format '{{.State.Status}} {{.State.ExitCode}}'
+docker compose --profile batch run --rm batch job=WorkTableExport runId=export-01 \
+  destinations=both output.compression=gzip \
+  "recover.executionId=$execution_id" "recover.owner=$owner"
+```
+
+標準の入力はS3のversionIdで固定し、版機能がない場合はETagを `If-Match` に使います。チェックポイントはヘッダを除いた論理レコード位置です。ワーク、エラー、チェックポイントは同じDataSourceとトランザクションマネージャーで確定し、gzip再開時は先頭から検証しながら読み飛ばします。許容した不正行も論理位置を進めます。構文や解凍の破損は実行を止めます。入力のEOF、全体SHA-256と件数、業務検証後にREADYを確定するため、ワークが残っても途中状態は業務反映されません。直接INSERTは既コミットChunkが業務表に残る例です。通常upsertは入力ワークに更新前versionを保持し、実更新・新規挿入の件数が一致した場合に反映します。
+
+## 2宛先の片側成功から回復する
+
+固定ワークはrunで分離し、出力用の値まで保存します。会員CSVは顧客・会員の組で一意になり、会員のない顧客も1行になります。Cursorはトランザクション内のFORWARD_ONLYで使い、接続と取得件数をログで確認します。同じ行順・書式・gzip設定から同じバイト列を作ります。
+
+台帳には宛先別のキー、uploadId、格納予定のサイズとSHA-256、Completeの結果と版を記録します。予定値のコミットとS3 Completeの間に障害が起きた場合は、再開時に既存オブジェクトをHEADとストリームGETで照合します。成功した宛先は保持し、未完了の宛先に固定ワークからファイルを再送します。固定ワークのない直接SELECTで未完了物を生成し直すには、新しいrunが必要です。読み取れる成功物を配布元にする場合は `FileTransfer` を独立したrunで使えます。CopyObjectは宛先のクライアントで元の版を読める場合に使い、ストリーム転送は宛先を別々に認証できます。manifestは最後に公開します。バケット間の配布とDB反映にはそれぞれ別のコミット境界があります。
+
+上限付きバッファは全Partitionに共通です。パートは両宛先の送信・再試行が完了してから再利用します。初期設定のパート保持量は8 MiB × 2です。設定で最大128 MiBに制限し、JDBCのfetch、DTOとChunk、DecimalFormat、圧縮器、SDK、スレッド、native memoryの消費は別途観測します。入力の最大論理長とChunk件数の積は64 Mi UTF-16単位までです。顧客名・メール・状態・会員区分のDBフィールドにも上限があります。Cursorの最大行幅と同時取得件数から取得ウィンドウを起動時に検査します。出口の通常停止ではAbortし、強制終了後は台帳のuploadIdとバケットのlifecycleで回収します。
+
+## 更新した行を後から照合する
+
+パッチのpreviewはSELECTで対象、旧値、予定値、versionを固定します。適用は条件付き更新と監査を同じDBトランザクションで確定します。適用後のversionと値が一致した行だけを復元します。単一トランザクション例はすべて成立した場合に確定します。Chunk例は既コミットの変更が残り、後続Chunkを再開します。配布用の差分はコミット済みの監査から再送できます。
+
+Archiveでは退避成果物と退避時versionを照合して削除します。MasterSyncの削除は既定で無効で、明示設定と全件の完全性確認が必要です。IncrementalExportは上限と重複期間を用い、受信側でキーとversionによる冪等反映を想定しています。遅延コミットを含む厳密なCDCには別の仕組みが必要です。別DB移行は対象DBの進捗と反映を同時に確定します。
+
+## COPYとDynamoDBの再開を区別する
+
+COPYはpgJDBCのCopyManagerを使います。接続ローカルのrun設定と固定文でワークを選びます。標準CSV/TSVで互換性を検証するため、UTF-8、LF、二重引用符、固定列を使用します。取込サンプルはピン留めした入力を通常パーサーで検証し、別のGETでCOPYしてからワーク反映へ進みます。COPYはファイル単位で再試行します。通常Chunkと同じ条件で比較する場合は事前検証と反映も計測してください。
+
+DynamoDB Queryは設計済みのキー条件を使います。Scanは逐次ページを固定ワークへ保存して順序を決めます。固定できるのは読み取った値です。例では更新のない世代を用意します。BatchWriteは明示的な全体置換の経路、Update/Deleteはversion条件を付けた経路です。PostgreSQL更新とoutboxは同じDBトランザクションで確定し、DynamoDBの操作IDと変更は同じTransactWriteItemsに入れます。応答喪失時は操作IDとpayload hashを照合します。DynamoDB Localはスループット制限やparallel Scanの本番特性を測る環境には使いません。
+
+## 起動時にDBとAWSの権限を指定する
+
+Springのlocal設定でのみテスト用エンドポイントとダミー認証を渡します。ECSではTaskRoleがアプリのS3/DynamoDB/KMSを使い、必要時に相手先ロールをAssumeRoleします。ExecutionRoleはECR、ログ、起動時Secret注入を扱います。TLSの確認はJDBCの `sslmode=verify-full` とCAで設定します。[TerraformとECSの手順](./infra/README.md)

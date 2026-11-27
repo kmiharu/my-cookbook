@@ -1,0 +1,13 @@
+.gradle/
+**/build/
+.env
+*.jfr
+*.hprof
+bench-results/raw/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.auto.tfvars
+*.tfvars
+!*.tfvars.example

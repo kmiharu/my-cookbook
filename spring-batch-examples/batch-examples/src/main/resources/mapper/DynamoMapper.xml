@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cookbook.batch.examples.dynamo.DynamoMapper">
+  <resultMap id="work" type="cookbook.batch.examples.dynamo.DynamoMapper$Work">
+    <constructor>
+      <arg column="run_key" javaType="java.lang.String"/>
+      <arg column="pk" javaType="java.lang.String"/>
+      <arg column="sk" javaType="java.lang.String"/>
+      <arg column="version" javaType="_long"/>
+      <arg column="status" javaType="java.lang.String"/>
+      <arg column="balance" javaType="java.math.BigDecimal"/>
+      <arg column="memo_state" javaType="java.lang.String"/>
+      <arg column="memo" javaType="java.lang.String"/>
+      <arg column="ordinal" javaType="java.lang.Long"/>
+    </constructor>
+  </resultMap>
+  <resultMap id="state" type="cookbook.batch.examples.dynamo.DynamoMapper$State">
+    <constructor>
+      <arg column="next_page" javaType="java.lang.String"/>
+      <arg column="state" javaType="java.lang.String"/>
+      <arg column="input_rows" javaType="java.lang.Long"/>
+      <arg column="input_sha256" javaType="java.lang.String"/>
+    </constructor>
+  </resultMap>
+  <resultMap id="counts" type="cookbook.batch.examples.dynamo.DynamoMapper$Counts">
+    <constructor>
+      <arg column="expected" javaType="_long"/>
+      <arg column="updated" javaType="_long"/>
+    </constructor>
+  </resultMap>
+  <insert id="start">
+    INSERT INTO dynamo_run(run_key) VALUES (#{runKey}) ON CONFLICT DO NOTHING
+  </insert>
+  <select id="state" resultMap="state" useCache="false">
+    SELECT next_page, state, input_rows, input_sha256 FROM dynamo_run WHERE run_key = #{runKey}
+  </select>
+  <sql id="insertWork">
+    INSERT INTO dynamo_work(run_key, pk, sk, version, status, balance, memo_state, memo, ordinal)
+    VALUES
+    <foreach item="row" collection="rows" separator=",">
+      (#{row.runKey}, #{row.pk}, #{row.sk}, #{row.version}, #{row.status}, #{row.balance}, #{row.memoState}, #{row.memo}, #{row.ordinal})
+    </foreach>
+  </sql>
+  <insert id="stage">
+    <include refid="insertWork"/>
+  </insert>
+  <insert id="stagePage">
+    <include refid="insertWork"/>
+    ON CONFLICT (run_key, pk, sk) DO UPDATE SET delivered = dynamo_work.delivered
+    WHERE (dynamo_work.version, dynamo_work.status, dynamo_work.balance, dynamo_work.memo_state, dynamo_work.memo)
+       IS NOT DISTINCT FROM (excluded.version, excluded.status, excluded.balance, excluded.memo_state, excluded.memo)
+  </insert>
+  <update id="savePage">
+    UPDATE dynamo_run SET next_page = #{nextPage}, state = CASE WHEN #{last} THEN 'READY' ELSE 'PREPARING' END
+    WHERE run_key = #{runKey} AND state = 'PREPARING'
+  </update>
+  <update id="inputEnd">
+    UPDATE dynamo_run SET input_rows = #{rows}, input_sha256 = #{sha256}
+    WHERE run_key = #{runKey} AND state = 'PREPARING'
+  </update>
+  <update id="seal">
+    UPDATE dynamo_run SET state = 'READY' WHERE run_key = #{runKey} AND state = 'PREPARING'
+  </update>
+  <update id="applied">
+    UPDATE dynamo_run SET state = 'APPLIED' WHERE run_key = #{runKey} AND state = 'READY'
+    AND NOT EXISTS (SELECT 1 FROM dynamo_work WHERE run_key = #{runKey} AND NOT delivered)
+  </update>
+  <sql id="workColumns">run_key, pk, sk, version, status, balance, memo_state, memo, ordinal</sql>
+  <select id="stream" resultMap="work" fetchSize="1000" resultSetType="FORWARD_ONLY" useCache="false">
+    SELECT <include refid="workColumns"/> FROM dynamo_work WHERE run_key = #{runKey} ORDER BY pk, sk
+  </select>
+  <select id="pending" resultMap="work" useCache="false">
+    SELECT <include refid="workColumns"/> FROM dynamo_work WHERE run_key = #{runKey} AND NOT delivered
+    ORDER BY pk, sk LIMIT #{limit}
+  </select>
+  <update id="delivered">
+    UPDATE dynamo_work SET delivered = true WHERE run_key = #{runKey} AND NOT delivered
+    AND (pk, sk) IN
+    <foreach item="row" collection="rows" open="(" separator="," close=")">
+      (#{row.pk}, #{row.sk})
+    </foreach>
+  </update>
+  <insert id="seed">
+    INSERT INTO dynamo_work (run_key, pk, sk, version, status, balance, memo_state, memo)
+    SELECT #{runKey}, #{partition}, id::text, version, status, 0, 'VALUE', name FROM customer
+    <where>
+      <if test="fromDate != null">updated_at &gt;= #{fromDate}</if>
+      <if test="toDate != null">AND updated_at &lt; #{toDate}</if>
+    </where>
+  </insert>
+  <select id="validatePgDelivery" resultType="int" useCache="false">
+    SELECT count(*) FROM (
+      SELECT 1 FROM dynamo_work WHERE run_key = #{runKey}
+      AND (octet_length(memo) &gt; 407552 OR octet_length(status) NOT BETWEEN 1 AND 64 OR version &lt; 0)
+      LIMIT 1
+    ) invalid_value
+  </select>
+  <select id="stageOutbox" resultMap="counts" affectData="true" flushCache="true">
+    WITH targets AS (
+      SELECT id, version, status FROM customer WHERE status IS DISTINCT FROM #{status}
+      <if test="fromDate != null">AND updated_at &gt;= #{fromDate}</if>
+      <if test="toDate != null">AND updated_at &lt; #{toDate}</if>
+    ), changed AS (
+      UPDATE customer c SET status = #{status}, version = c.version + 1, updated_at = clock_timestamp()
+      FROM targets t
+      WHERE c.id = t.id AND c.version = t.version AND c.status IS NOT DISTINCT FROM t.status
+      RETURNING c.id, c.version, c.status
+    ), enqueued AS (
+      INSERT INTO dynamo_outbox (run_key, pk, sk, version, status, memo)
+      SELECT #{runKey}, #{partition}, id::text, version, status, '' FROM changed RETURNING 1
+    )
+    SELECT (SELECT count(*) FROM targets) AS expected, (SELECT count(*) FROM enqueued) AS updated
+  </select>
+  <select id="nextOutbox" resultMap="work" useCache="false">
+    SELECT candidate.run_key, candidate.pk, candidate.sk, candidate.version, candidate.status,
+           0::numeric AS balance, 'ABSENT' AS memo_state, NULL::text AS memo, NULL::bigint AS ordinal
+    FROM dynamo_outbox candidate
+    WHERE candidate.run_key = #{runKey} AND NOT candidate.delivered
+      AND NOT EXISTS (
+        SELECT 1 FROM dynamo_outbox earlier
+        WHERE earlier.pk = candidate.pk AND earlier.sk = candidate.sk
+          AND earlier.version &lt; candidate.version AND NOT earlier.delivered
+      )
+    ORDER BY candidate.pk, candidate.sk, candidate.version LIMIT #{limit}
+  </select>
+  <select id="undeliveredOutbox" resultType="long" useCache="false">
+    SELECT count(*) FROM dynamo_outbox WHERE run_key = #{runKey} AND NOT delivered
+  </select>
+  <update id="outboxDelivered">
+    UPDATE dynamo_outbox SET delivered = true
+    WHERE run_key = #{runKey} AND NOT delivered
+    AND (pk, sk, version) IN
+    <foreach item="row" collection="rows" open="(" separator="," close=")">
+      (#{row.pk}, #{row.sk}, #{row.version})
+    </foreach>
+  </update>
+  <select id="validatePgKeys" resultType="int" useCache="false">
+    SELECT count(*) FROM (
+      SELECT 1 FROM dynamo_work WHERE run_key = #{runKey}
+      AND CASE WHEN sk ~ '^[1-9][0-9]{0,18}$' THEN sk::numeric &gt; 9223372036854775807 ELSE true END
+      LIMIT 1
+    ) invalid_key
+  </select>
+  <select id="applyPg" resultMap="counts" affectData="true" flushCache="true">
+    WITH desired AS (
+      SELECT sk::bigint AS id, coalesce(memo, 'Customer ' || sk) AS name, status
+      FROM dynamo_work WHERE run_key = #{runKey}
+    ), changes AS (
+      SELECT d.*, c.version AS old_version, c.name AS old_name, c.status AS old_status
+      FROM desired d LEFT JOIN customer c ON c.id = d.id
+      WHERE c.id IS NULL OR (c.name, c.status) IS DISTINCT FROM (d.name, d.status)
+    ), changed AS (
+      UPDATE customer c
+      SET name = d.name, status = d.status, version = c.version + 1, updated_at = clock_timestamp()
+      FROM changes d WHERE c.id = d.id AND c.version = d.old_version
+        AND (c.name, c.status) IS NOT DISTINCT FROM (d.old_name, d.old_status)
+      RETURNING c.id
+    ), added AS (
+      INSERT INTO customer(id, name, status)
+      SELECT id, name, status FROM changes WHERE old_version IS NULL
+      ON CONFLICT (id) DO NOTHING RETURNING id
+    )
+    SELECT (SELECT count(*) FROM changes) AS expected,
+           (SELECT count(*) FROM changed) + (SELECT count(*) FROM added) AS updated
+  </select>
+  <update id="markApplied">
+    UPDATE dynamo_run SET state = 'APPLIED' WHERE run_key = #{runKey} AND state = 'READY'
+  </update>
+  <select id="countWork" resultType="long" useCache="false">
+    SELECT count(*) FROM dynamo_work WHERE run_key = #{runKey}
+  </select>
+  <select id="countOutbox" resultType="long" useCache="false">
+    SELECT count(*) FROM dynamo_outbox WHERE run_key = #{runKey}
+  </select>
+  <select id="claimGeneration" resultType="string" affectData="true" flushCache="true">
+    INSERT INTO dynamo_generation (pk, run_key) VALUES (#{pk}, #{runKey})
+    ON CONFLICT (pk) DO UPDATE SET run_key = dynamo_generation.run_key
+    RETURNING run_key
+  </select>
+  <select id="assertGenerationWritable" resultType="string" useCache="false">
+    SELECT run_key FROM dynamo_generation WHERE pk = #{partition} AND NOT delivered
+  </select>
+  <update id="markGenerationDelivered">
+    UPDATE dynamo_generation SET delivered = true WHERE pk = #{pk} AND run_key = #{runKey}
+  </update>
+  <select id="generationOwner" resultType="string" useCache="false">
+    SELECT run_key FROM dynamo_generation WHERE pk = #{partition}
+  </select>
+  <select id="claimInput" resultType="string" affectData="true" flushCache="true">
+    INSERT INTO dynamo_input_applied(job_name, input_revision, partition_key, run_key)
+    VALUES (#{job}, #{revision}, #{partition}, #{runKey})
+    ON CONFLICT (job_name, input_revision, partition_key)
+    DO UPDATE SET run_key = dynamo_input_applied.run_key
+    RETURNING run_key
+  </select>
+</mapper>

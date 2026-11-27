@@ -1,0 +1,115 @@
+name: spring-batch-examples
+
+x-postgres: &postgres
+  image: postgres:16.15-bookworm@sha256:5264710be20f409750ac6dc4e5706dcef929c87e241605463f0f9aefa932a8d9
+  environment:
+    POSTGRES_DB: ${BATCH_DB_NAME:-cookbook}
+    POSTGRES_USER: ${BATCH_DB_USER:-cookbook}
+    POSTGRES_PASSWORD: ${BATCH_DB_PASSWORD:-local-cookbook}
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+    interval: 2s
+    timeout: 2s
+    retries: 30
+  mem_limit: 3g
+
+x-aws-environment: &aws-environment
+  AWS_ACCESS_KEY_ID: ${BATCH_S3_ACCESS_KEY:-localcookbook}
+  AWS_SECRET_ACCESS_KEY: ${BATCH_S3_SECRET_KEY:-localcookbooksecret}
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_EC2_METADATA_DISABLED: "true"
+  AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+  AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+  AWS_MAX_ATTEMPTS: "2"
+  NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,::1},s3,dynamodb,postgres,postgres-target"
+  no_proxy: "${no_proxy:-localhost,127.0.0.1,::1},s3,dynamodb,postgres,postgres-target"
+
+services:
+  postgres:
+    <<: *postgres
+    ports: ["127.0.0.1:${BATCH_POSTGRES_PORT:-15432}:5432"]
+    volumes: [postgres-data:/var/lib/postgresql/data]
+
+  postgres-target:
+    <<: *postgres
+    ports: ["127.0.0.1:${BATCH_TARGET_POSTGRES_PORT:-15433}:5432"]
+    volumes: [postgres-target-data:/var/lib/postgresql/data]
+
+  s3:
+    image: chrislusf/seaweedfs:4.55@sha256:7ca46aeae2f223b37e5d91593c17ab37738eec6df6ab69b48a0487f7643342b9
+    command:
+      - mini
+      - -dir=/data
+      - "-bucket=${BATCH_INPUT_BUCKET:-batch-input},${BATCH_INTERNAL_BUCKET:-batch-internal},${BATCH_PARTNER_BUCKET:-batch-partner}"
+      - "-volume.max=${BATCH_S3_VOLUME_MAX:-0}"
+    environment: *aws-environment
+    ports: ["127.0.0.1:${BATCH_S3_PORT:-18333}:8333"]
+    volumes: [s3-data:/data]
+    mem_limit: 2g
+
+  dynamodb-volume-init:
+    image: &dynamodb-image amazon/dynamodb-local:3.3.0@sha256:d89f8fcc6b1a39cb35976c248ed42a28c66ae00dc043099210f5571e42648ab4
+    user: "0:0"
+    entrypoint: [/bin/sh, -ec, chown 1000:1000 /home/dynamodblocal/data]
+    volumes: [dynamodb-data:/home/dynamodblocal/data]
+
+  dynamodb:
+    image: *dynamodb-image
+    depends_on:
+      dynamodb-volume-init: {condition: service_completed_successfully}
+    command: ["-jar", DynamoDBLocal.jar, -sharedDb, -dbPath, /home/dynamodblocal/data]
+    ports: ["127.0.0.1:${BATCH_DYNAMO_PORT:-18000}:8000"]
+    volumes: [dynamodb-data:/home/dynamodblocal/data]
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx768m"
+    mem_limit: 1536m
+
+  awscli:
+    profiles: [tools]
+    image: amazon/aws-cli:2.42.4@sha256:4a1a668837d5f97ced202e03827da1bc0b48cda946be89909cd7a02023f62921
+    entrypoint: [/bin/sh, -c, exec sleep infinity]
+    environment: *aws-environment
+    mem_limit: 384m
+
+  batch:
+    profiles: [batch]
+    image: ${BATCH_IMAGE:-spring-batch-examples:local}
+    build: .
+    depends_on:
+      postgres: {condition: service_healthy}
+      s3: {condition: service_started}
+      dynamodb: {condition: service_started}
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      BATCH_DB_URL: jdbc:postgresql://postgres:5432/${BATCH_DB_NAME:-cookbook}
+      BATCH_DB_USER: ${BATCH_DB_USER:-cookbook}
+      BATCH_DB_PASSWORD: ${BATCH_DB_PASSWORD:-local-cookbook}
+      BATCH_TARGET_DB_URL: jdbc:postgresql://postgres-target:5432/${BATCH_TARGET_DB_NAME:-${BATCH_DB_NAME:-cookbook}}
+      BATCH_TARGET_DB_USER: ${BATCH_DB_USER:-cookbook}
+      BATCH_TARGET_DB_PASSWORD: ${BATCH_DB_PASSWORD:-local-cookbook}
+      BATCH_S3_ENDPOINT: http://s3:8333
+      BATCH_S3_ACCESS_KEY: ${BATCH_S3_ACCESS_KEY:-localcookbook}
+      BATCH_S3_SECRET_KEY: ${BATCH_S3_SECRET_KEY:-localcookbooksecret}
+      BATCH_INPUT_BUCKET: ${BATCH_INPUT_BUCKET:-batch-input}
+      BATCH_INTERNAL_BUCKET: ${BATCH_INTERNAL_BUCKET:-batch-internal}
+      BATCH_PARTNER_BUCKET: ${BATCH_PARTNER_BUCKET:-batch-partner}
+      BATCH_INTERNAL_REGION: us-east-1
+      BATCH_PARTNER_REGION: us-east-1
+      BATCH_DYNAMO_ENDPOINT: http://dynamodb:8000
+      BATCH_DYNAMO_REGION: us-east-1
+      BATCH_DYNAMO_TABLE: ${BATCH_DYNAMO_TABLE:-batch-customers}
+      BATCH_DYNAMO_OPERATIONS_TABLE: ${BATCH_DYNAMO_OPERATIONS_TABLE:-batch-operations}
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,::1},s3,dynamodb,postgres,postgres-target"
+      no_proxy: "${no_proxy:-localhost,127.0.0.1,::1},s3,dynamodb,postgres,postgres-target"
+    stop_grace_period: 120s
+    mem_limit: 4g
+
+volumes:
+  postgres-data:
+  postgres-target-data:
+  s3-data:
+  dynamodb-data:

@@ -1,0 +1,9 @@
+region = "us-east-1"
+caller_task_role_arn = "arn:aws:iam::111111111111:role/cookbook-batch-task"
+bucket_arn = "arn:aws:s3:::222222222222-example-recipient"
+object_prefix = "cookbook/"
+kms_key_arn = "arn:aws:kms:us-east-1:222222222222:key/00000000-0000-0000-0000-000000000000"
+# Set to create the receiving role in the recipient account.
+# assume_role_name = "cookbook-batch-recipient"
+# Session used for Terraform changes in the recipient account.
+# terraform_operator_role_arn = "arn:aws:iam::222222222222:role/terraform-operator"

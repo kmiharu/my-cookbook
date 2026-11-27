@@ -1,0 +1,51 @@
+spring:
+  main:
+    web-application-type: none
+    banner-mode: off
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: never
+      isolation-level-for-create: READ_COMMITTED
+  flyway:
+    enabled: false
+  datasource:
+    url: ${BATCH_DB_URL:jdbc:postgresql://localhost:5432/batch}
+    username: ${BATCH_DB_USER:batch}
+    password: ${BATCH_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 18
+      connection-timeout: 10000
+      data-source-properties:
+        connectTimeout: 8
+        socketTimeout: 35
+        reWriteBatchedInserts: true
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    default-executor-type: SIMPLE
+    cache-enabled: false
+    local-cache-scope: STATEMENT
+    lazy-loading-enabled: false
+    default-statement-timeout: 25
+    map-underscore-to-camel-case: true
+logging:
+  pattern:
+    console: '%d{ISO8601} %p [%thread] %logger{36} job=%X{job} runId=%X{runId} %msg%n'
+cookbook:
+  batch:
+    defaults:
+      '[fetchSize]': '1000'
+      '[chunkSize]': '1000'
+      '[partSize]': '8388608'
+      '[transferWorkers]': '1'
+      '[totalBuffers]': '2'
+      partitions: '1'
+      destinations: internal
+batch:
+  dynamo:
+    endpoint: ${BATCH_DYNAMO_ENDPOINT:}
+    region: ${BATCH_DYNAMO_REGION:us-east-1}
+    table: ${BATCH_DYNAMO_TABLE:cookbook-items}
+    operations-table: ${BATCH_DYNAMO_OPERATIONS_TABLE:cookbook-operations}

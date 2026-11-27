@@ -1,0 +1,13 @@
+name = "cookbook-batch-sandbox"
+region = "us-east-1"
+availability_zones = ["us-east-1a", "us-east-1b"]
+input_bucket = "111111111111-cookbook-input-sandbox"
+internal_bucket = "111111111111-cookbook-output-sandbox"
+input_prefix = "incoming/"
+internal_prefix = "exports/"
+# Set only for a disposable sandbox and review the plan before changing them.
+# deletion_protection = false
+# skip_final_snapshot = true
+# force_destroy_buckets = true
+# Add after pushing the image to the root's ECR repository.
+# image_uri = "111111111111.dkr.ecr.us-east-1.amazonaws.com/cookbook-batch-sandbox@sha256:<digest>"

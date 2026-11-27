@@ -1,0 +1,231 @@
+{
+  "cases": {
+    "representative-export": {
+      "trials": 3,
+      "metrics": {
+        "container_seconds": {
+          "median": 44.160818,
+          "min": 39.634877,
+          "max": 49.328462
+        },
+        "rows_per_second": {
+          "median": 22644.508079537838,
+          "min": 20272.27202015745,
+          "max": 25230.3041081722
+        },
+        "mib_per_second": {
+          "median": 1.2329250677083263,
+          "min": 1.1037639795602197,
+          "max": 1.3737138511292737
+        },
+        "compression_ratio": {
+          "median": 0.35251504813404816,
+          "min": 0.35251504813404816,
+          "max": 0.35251504813404816
+        },
+        "sampled_rss_hwm_kib": {
+          "median": 299656,
+          "min": 287916,
+          "max": 323056
+        },
+        "sampled_process_cpu_ticks": {
+          "median": 2043,
+          "min": 2022,
+          "max": 2241
+        },
+        "observed_heap_before_gc_bytes": {
+          "median": 118489088,
+          "min": 102760448,
+          "max": 127926272
+        },
+        "gc_pause_ms": {
+          "median": 1073.5919999999996,
+          "min": 841.8290000000002,
+          "max": 1250.063
+        }
+      }
+    },
+    "representative-import": {
+      "trials": 1,
+      "metrics": {
+        "container_seconds": {
+          "median": 56.556582,
+          "min": 56.556582,
+          "max": 56.556582
+        },
+        "rows_per_second": {
+          "median": 17681.40797476057,
+          "min": 17681.40797476057,
+          "max": 17681.40797476057
+        },
+        "mib_per_second": {
+          "median": 0.14524475961591168,
+          "min": 0.14524475961591168,
+          "max": 0.14524475961591168
+        },
+        "sampled_rss_hwm_kib": {
+          "median": 354740,
+          "min": 354740,
+          "max": 354740
+        },
+        "sampled_process_cpu_ticks": {
+          "median": 2852,
+          "min": 2852,
+          "max": 2852
+        },
+        "observed_heap_before_gc_bytes": {
+          "median": 119537664,
+          "min": 119537664,
+          "max": 119537664
+        },
+        "gc_pause_ms": {
+          "median": 866.4700000000001,
+          "min": 866.4700000000001,
+          "max": 866.4700000000001
+        }
+      }
+    }
+  },
+  "observations": [
+    {
+      "case": "representative-export",
+      "run": "compare-20261127T053517-52262-representative-export-0",
+      "job": "CustomerExport",
+      "iteration": "0",
+      "rows": "1000000",
+      "status": "ok",
+      "exit_code": 0,
+      "oom_killed": false,
+      "image": "sha256:fd5519407920bcebb1485109573101813c7c44d47eff3bdcabdf4d00e03136a9",
+      "launch_mode": "container",
+      "jar_sha256": null,
+      "configured_container_memory_limit_bytes": 4294967296,
+      "observed_cgroup_memory_limit_bytes": 17179869184,
+      "container_seconds": 33.125957,
+      "rows_per_second": 30187.80710244839,
+      "storage_bytes_one_destination": 28545898,
+      "transmitted_or_read_bytes": 57091796,
+      "mib_per_second": 1.6436349151423786,
+      "compression_ratio": 0.35251504813404816,
+      "sampled_rss_hwm_kib": 308172,
+      "sampled_cgroup_peak_bytes": null,
+      "sampled_process_cpu_ticks": 2028,
+      "sampled_cgroup_cpu_usec": null,
+      "observed_heap_before_gc_bytes": 97517568,
+      "gc_pause_count": 54,
+      "gc_pause_ms": 1007.7660000000001
+    },
+    {
+      "case": "representative-export",
+      "run": "compare-20261127T053517-52262-representative-export-1",
+      "job": "CustomerExport",
+      "iteration": "1",
+      "rows": "1000000",
+      "status": "ok",
+      "exit_code": 0,
+      "oom_killed": false,
+      "image": "sha256:fd5519407920bcebb1485109573101813c7c44d47eff3bdcabdf4d00e03136a9",
+      "launch_mode": "container",
+      "jar_sha256": null,
+      "configured_container_memory_limit_bytes": 4294967296,
+      "observed_cgroup_memory_limit_bytes": 17179869184,
+      "container_seconds": 44.160818,
+      "rows_per_second": 22644.508079537838,
+      "storage_bytes_one_destination": 28545898,
+      "transmitted_or_read_bytes": 57091796,
+      "mib_per_second": 1.2329250677083263,
+      "compression_ratio": 0.35251504813404816,
+      "sampled_rss_hwm_kib": 299656,
+      "sampled_cgroup_peak_bytes": null,
+      "sampled_process_cpu_ticks": 2043,
+      "sampled_cgroup_cpu_usec": null,
+      "observed_heap_before_gc_bytes": 127926272,
+      "gc_pause_count": 49,
+      "gc_pause_ms": 841.8290000000002
+    },
+    {
+      "case": "representative-export",
+      "run": "compare-20261127T053517-52262-representative-export-2",
+      "job": "CustomerExport",
+      "iteration": "2",
+      "rows": "1000000",
+      "status": "ok",
+      "exit_code": 0,
+      "oom_killed": false,
+      "image": "sha256:fd5519407920bcebb1485109573101813c7c44d47eff3bdcabdf4d00e03136a9",
+      "launch_mode": "container",
+      "jar_sha256": null,
+      "configured_container_memory_limit_bytes": 4294967296,
+      "observed_cgroup_memory_limit_bytes": 17179869184,
+      "container_seconds": 39.634877,
+      "rows_per_second": 25230.3041081722,
+      "storage_bytes_one_destination": 28545898,
+      "transmitted_or_read_bytes": 57091796,
+      "mib_per_second": 1.3737138511292737,
+      "compression_ratio": 0.35251504813404816,
+      "sampled_rss_hwm_kib": 287916,
+      "sampled_cgroup_peak_bytes": null,
+      "sampled_process_cpu_ticks": 2022,
+      "sampled_cgroup_cpu_usec": null,
+      "observed_heap_before_gc_bytes": 118489088,
+      "gc_pause_count": 49,
+      "gc_pause_ms": 1250.063
+    },
+    {
+      "case": "representative-export",
+      "run": "compare-20261127T053517-52262-representative-export-3",
+      "job": "CustomerExport",
+      "iteration": "3",
+      "rows": "1000000",
+      "status": "ok",
+      "exit_code": 0,
+      "oom_killed": false,
+      "image": "sha256:fd5519407920bcebb1485109573101813c7c44d47eff3bdcabdf4d00e03136a9",
+      "launch_mode": "container",
+      "jar_sha256": null,
+      "configured_container_memory_limit_bytes": 4294967296,
+      "observed_cgroup_memory_limit_bytes": 17179869184,
+      "container_seconds": 49.328462,
+      "rows_per_second": 20272.27202015745,
+      "storage_bytes_one_destination": 28545898,
+      "transmitted_or_read_bytes": 57091796,
+      "mib_per_second": 1.1037639795602197,
+      "compression_ratio": 0.35251504813404816,
+      "sampled_rss_hwm_kib": 323056,
+      "sampled_cgroup_peak_bytes": null,
+      "sampled_process_cpu_ticks": 2241,
+      "sampled_cgroup_cpu_usec": null,
+      "observed_heap_before_gc_bytes": 102760448,
+      "gc_pause_count": 56,
+      "gc_pause_ms": 1073.5919999999996
+    },
+    {
+      "case": "representative-import",
+      "run": "compare-20261127T053517-52262-representative-import-1",
+      "job": "CustomerUpsert",
+      "iteration": "1",
+      "rows": "1000000",
+      "status": "ok",
+      "exit_code": 0,
+      "oom_killed": false,
+      "image": "sha256:fd5519407920bcebb1485109573101813c7c44d47eff3bdcabdf4d00e03136a9",
+      "launch_mode": "container",
+      "jar_sha256": null,
+      "configured_container_memory_limit_bytes": 4294967296,
+      "observed_cgroup_memory_limit_bytes": 17179869184,
+      "container_seconds": 56.556582,
+      "rows_per_second": 17681.40797476057,
+      "storage_bytes_one_destination": 8613577,
+      "transmitted_or_read_bytes": 8613577,
+      "mib_per_second": 0.14524475961591168,
+      "compression_ratio": null,
+      "sampled_rss_hwm_kib": 354740,
+      "sampled_cgroup_peak_bytes": null,
+      "sampled_process_cpu_ticks": 2852,
+      "sampled_cgroup_cpu_usec": null,
+      "observed_heap_before_gc_bytes": 119537664,
+      "gc_pause_count": 81,
+      "gc_pause_ms": 866.4700000000001
+    }
+  ]
+}
