@@ -1,0 +1,48 @@
+name: Spring Batch large data benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: Dataset and service to measure
+        type: choice
+        options:
+          - postgres-1000000
+          - postgres-10000000
+          - dynamodb-1000000
+        default: postgres-1000000
+
+permissions:
+  contents: read
+
+jobs:
+  spring-batch-large-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: spring-batch-examples
+    env:
+      BENCHMARK_WORKLOAD: ${{ inputs.workload }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          case "$BENCHMARK_WORKLOAD" in
+            postgres-1000000|postgres-10000000)
+              ./scripts/benchmark-local.sh "${BENCHMARK_WORKLOAD#postgres-}" 256 3 bench-results/raw/ci
+              ;;
+            dynamodb-1000000)
+              ./scripts/setup-local.sh
+              docker compose --profile batch build batch
+              docker compose --profile batch run --rm -T --no-deps batch job=Migrate runId=ddb-ci-migrate
+              ./scripts/dynamodb-benchmark.sh 1000000 ddb-ci bench-results/raw/ci
+              ;;
+            *) exit 2 ;;
+          esac
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spring-batch-benchmark-${{ inputs.workload }}-${{ github.run_id }}
+          path: spring-batch-examples/bench-results/raw/ci/
+      - if: always()
+        run: docker compose --profile tools --profile batch down --remove-orphans -v

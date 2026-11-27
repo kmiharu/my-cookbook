@@ -1,0 +1,20 @@
+name = "cookbook-batch"
+region = "us-east-1"
+subnet_ids = ["subnet-0123456789abcdef0", "subnet-0123456789abcdef1"]
+security_group_ids = ["sg-0123456789abcdef0"]
+db_url = "jdbc:postgresql://example.cluster-abc.us-east-1.rds.amazonaws.com:5432/batch?sslmode=verify-full&sslrootcert=/opt/batch/certs/rds-global-bundle.pem"
+db_secret_arn = "arn:aws:secretsmanager:us-east-1:111111111111:secret:cookbook/database-a1b2c3"
+input_bucket = "example-cookbook-input"
+input_prefix = "incoming/"
+internal_bucket = "example-cookbook-output"
+internal_prefix = "exports/"
+dynamo_table = {
+  name = "cookbook-items"
+  arn = "arn:aws:dynamodb:us-east-1:111111111111:table/cookbook-items"
+}
+dynamo_operations_table = {
+  name = "cookbook-operations"
+  arn = "arn:aws:dynamodb:us-east-1:111111111111:table/cookbook-operations"
+}
+# Add after pushing the image to the root's ECR repository.
+# image_uri = "111111111111.dkr.ecr.us-east-1.amazonaws.com/cookbook-batch@sha256:<digest>"

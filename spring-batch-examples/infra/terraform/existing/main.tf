@@ -1,0 +1,29 @@
+module "task" {
+  source = "../modules/task"
+
+  name                    = var.name
+  region                  = var.region
+  image_uri               = var.image_uri
+  cpu                     = var.cpu
+  memory                  = var.memory
+  architecture            = var.architecture
+  log_retention_days      = var.log_retention_days
+  db_url                  = var.db_url
+  db_secret_arn           = var.db_secret_arn
+  target_db_secret_arn    = var.target_db_secret_arn
+  target_db_url           = var.target_db_url
+  execution_kms_key_arns  = var.execution_kms_key_arns
+  task_kms_key_arns       = var.task_kms_key_arns
+  subnet_ids              = var.subnet_ids
+  security_group_ids      = var.security_group_ids
+  input_bucket            = var.input_bucket
+  input_prefix            = var.input_prefix
+  input_region            = var.input_region
+  internal_bucket         = var.internal_bucket
+  internal_prefix         = var.internal_prefix
+  internal_region         = var.internal_region
+  partner                 = var.partner
+  dynamo_region           = var.dynamo_region
+  dynamo_table            = var.dynamo_table
+  dynamo_operations_table = var.dynamo_operations_table
+}

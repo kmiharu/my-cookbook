@@ -1,0 +1,6 @@
+.env
+.env.*
+**/build
+**/.gradle
+infra
+bench-results
