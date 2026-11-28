@@ -6,13 +6,19 @@
 
 | 環境 | 確認する範囲 | 結果 |
 | --- | --- | --- |
-| Linux / Swift 6.2.4 | 30 × 24 時間の境界、容量上限、集計、読み戻し、書き込み再試行、円単位の入力検証 | Core テストで確認。 |
+| Linux / Swift 6.2.4 | 30 × 24 時間の境界、容量上限、集計、読み戻し、書き込み再試行、ビルドをまたぐ計測、円単位の入力検証 | Swift Testing 7 件が通過。金額入力は合計 14 ケース。 |
 | Linux / Swift 6.2.4 | 模擬予約の入力検証、応答喪失後の再送、更新競合、保存の復元 | `swiftui/checks/booking/verify.sh` で確認。 |
 | Linux / OpenPencil 0.17.0 | 編集可能な成果物の読み戻し、3 ページの画像出力、アクセシビリティ静的検査 | 確認。日本語フォントの代替を [デザイン](../design/README.md) に記録。 |
-| GitHub Actions / Xcode 27.2 | Foundation テスト、iPhone 17 / iOS 27.2 Simulator 向けコンパイル | 実行を確認中。 |
-| Simulator の起動・操作 | 一覧・検索、案内、各機能、共有シート、明暗、Dynamic Type、VoiceOver | 未確認。コンパイル結果だけで判定しない。 |
+| GitHub Actions / Xcode 27.2 · Swift 6.4.2 | Core と予約チェック、iPhone 17 / iOS 27.2 Simulator 向けコンパイル | 18 用途を含むビルドと検査が成功。 [実行 46105528785](https://github.com/kmiharu/my-cookbook/actions/runs/46105528785) |
+| iPhone 17 Simulator の起動 | アプリのインストール・起動、スクリーンショット取得コマンド | 起動と画像出力を確認。 [実行 46105317263](https://github.com/kmiharu/my-cookbook/actions/runs/46105317263) · [画像と xcresult](https://github.com/kmiharu/my-cookbook/actions/runs/46105317263/artifacts/15247646296) |
+| Simulator の操作 | 一覧・検索、案内、各機能、共有シート、明暗、Dynamic Type、VoiceOver | 操作未実施。画像の内容もこの作業環境では目視未確認。 |
+| GitHub Actions / iPhoneOS SDK | 実機向けの署名なし Release アーカイブ | アーカイブ作成成功。 [実行 46105528785](https://github.com/kmiharu/my-cookbook/actions/runs/46105528785) |
 | Codemagic / 署名・アップロード | 専用アプリ、署名、IPA、Apple の受領 | [配信台帳](RELEASE.md#配信台帳) を参照。 |
 | iPhone 16 / iOS 27.2.1 を初回候補 | 端末の機能、権限、バックグラウンド、通信断、操作と負荷 | 機種・OS・環境を記録して実施する。現時点の測定値なし。 |
+
+コンパイルとアーカイブの検証対象は GitHub コミット `97aa1c47c1c1b766cbf449106cb3653a97dd2144`、アプリ版 `0.1.0`、開発ビルド番号 `1`。Simulator の起動記録は直前の `ec6e6cbeedd1cad1c5f3a8bd5f37a28429a3191d`。画像を含む Actions 成果物の保持期間は 7 日。
+
+Linux では全サンプルの Swift ソースの構文確認に加え、Hacker News API と Apple の HLS テスト配信への到達を確認した。iPhone の通信性能、カメラ、AR、BLE を確認するには下記の実機手順を使う。
 
 ## 実機で行う順番
 

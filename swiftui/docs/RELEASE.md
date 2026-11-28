@@ -113,7 +113,8 @@ asc "$apple/apps/$ASC_APP_ID/betaGroups" \
 
 | 段階 | 照合する情報 | 現在の状態 |
 | --- | --- | --- |
-| Simulatorビルド | GitHub SHA、Codemagic IDまたはGitHub Actions run ID、CoreテストとXcode結果 | CI設定を作成。実行結果は検証記録を参照 |
+| Simulatorビルドと起動 | GitHub SHA、GitHub Actions run ID、CoreテストとXcode結果 | GitHub Actions で成功。[検証記録](VERIFICATION.md) |
+| 署名なし Release アーカイブ | GitHub SHA、Xcode iPhoneOS SDK、GitHub Actions run ID | GitHub Actions で成功。[検証記録](VERIFICATION.md) |
 | 署名済みビルド | GitHub SHA、Codemagic ID、バージョン・ビルド番号、IPA・アーカイブ | 専用Codemagic Appと署名設定の確認待ち |
 | アップロード | 同一IPAのCodemagic公開ステップ、Apple側の受領 | 未実施 |
 | Apple処理完了 | AppleビルドID、処理状態、保留事項 | 未確認 |
