@@ -1,0 +1,89 @@
+name: SwiftUI TestFlight release
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Codemagic の起動、進捗確認、内部テスターへの配布
+        type: choice
+        options: [start, status, distribute]
+        default: status
+        required: true
+      sha:
+        description: 配信する Git コミットの完全な SHA
+        type: string
+        required: true
+      version:
+        description: アプリのバージョン
+        type: string
+        required: true
+      build_number:
+        description: アプリのビルド番号
+        type: string
+        required: true
+      ref:
+        description: start に使う refs/heads/... または refs/tags/...
+        type: string
+      codemagic_build_id:
+        description: status と distribute に使う Codemagic ビルド ID
+        type: string
+      wait_seconds:
+        description: status で待機する秒数（0〜3600）。0 は1回照会
+        type: number
+        default: 0
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swiftui-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    environment: swiftui-testflight
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Run the TestFlight release command
+        shell: bash
+        env:
+          RELEASE_OPERATION: ${{ inputs.operation }}
+          RELEASE_REF: ${{ inputs.ref }}
+          RELEASE_SHA: ${{ inputs.sha }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_BUILD_NUMBER: ${{ inputs.build_number }}
+          RELEASE_CODEMAGIC_BUILD_ID: ${{ inputs.codemagic_build_id }}
+          RELEASE_WAIT_SECONDS: ${{ inputs.wait_seconds }}
+          CODEMAGIC_API_TOKEN: ${{ secrets.CODEMAGIC_API_TOKEN }}
+          CODEMAGIC_APP_ID: ${{ vars.CODEMAGIC_APP_ID }}
+          # Set the team that owns the catalog app so the CLI can verify its repository.
+          CODEMAGIC_TEAM_ID: ${{ vars.CODEMAGIC_TEAM_ID }}
+          ASC_APP_ID: ${{ vars.ASC_APP_ID }}
+          ASC_BETA_GROUP_ID: ${{ vars.ASC_BETA_GROUP_ID }}
+          CATALOG_BUNDLE_ID: ${{ vars.CATALOG_BUNDLE_ID }}
+          ASC_KEY_ID: ${{ vars.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ vars.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          args=("--sha=$RELEASE_SHA" "--version=$RELEASE_VERSION" "--build-number=$RELEASE_BUILD_NUMBER")
+          case "$RELEASE_OPERATION" in
+            start) args+=("--ref=$RELEASE_REF") ;;
+            status) args+=("--codemagic-build-id=$RELEASE_CODEMAGIC_BUILD_ID" "--wait=$RELEASE_WAIT_SECONDS") ;;
+            distribute) args+=("--codemagic-build-id=$RELEASE_CODEMAGIC_BUILD_ID") ;;
+            *) exit 2 ;;
+          esac
+
+          : "${ASC_PRIVATE_KEY:?Set the swiftui-testflight environment secret ASC_PRIVATE_KEY}"
+          umask 077
+          ASC_KEY_PATH="$(mktemp "${RUNNER_TEMP}/swiftui-asc.XXXXXX.p8")"
+          trap 'rm -f -- "$ASC_KEY_PATH"' EXIT
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$ASC_KEY_PATH"
+          unset ASC_PRIVATE_KEY
+          export ASC_KEY_PATH
+
+          python3 swiftui/ci/testflight.py "$RELEASE_OPERATION" "${args[@]}"

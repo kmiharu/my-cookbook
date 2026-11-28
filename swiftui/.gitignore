@@ -1,0 +1,8 @@
+.build/
+*.xcodeproj/
+DerivedData/
+*.xcresult/
+.DS_Store
+__pycache__/
+/build/
+/.release-project.*
