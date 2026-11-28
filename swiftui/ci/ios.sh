@@ -87,6 +87,14 @@ print(next(device["udid"] for device in devices if device["name"] == "iPhone 17"
     sleep 3
     xcrun simctl io "$device" screenshot "$output/catalog-launch.png"
   fi
+  if [[ "$build_status" == 0 && "${CATALOG_UNSIGNED_ARCHIVE:-0}" == 1 ]]; then
+    xcodebuild archive -project "$project" -scheme SwiftUICatalog \
+      -configuration Release -destination 'generic/platform=iOS' \
+      -derivedDataPath "$temporary/device-derived" \
+      -archivePath "$temporary/unsigned/SwiftUICatalog.xcarchive" \
+      CODE_SIGNING_ALLOWED=NO "CATALOG_SOURCE_REVISION=$revision"
+    test -f "$temporary/unsigned/SwiftUICatalog.xcarchive/Info.plist"
+  fi
   exit "$build_status"
 fi
 
