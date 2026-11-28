@@ -5,7 +5,7 @@ on:
     paths:
       - swiftui/App/**
       - swiftui/Core/**
-      - swiftui/Samples/**
+      - swiftui/checks/**
       - swiftui/project.yml
       - swiftui/ci/ios.sh
       - .github/workflows/swiftui-verify.yml

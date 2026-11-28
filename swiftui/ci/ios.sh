@@ -60,6 +60,7 @@ curl --fail --silent --show-error --location --max-time 90 \
 "$temporary/xcodegen/bin/xcodegen" generate --spec "$spec" --project .
 
 swift test --package-path Core --scratch-path "$temporary/core"
+bash checks/booking/verify.sh
 project="$PWD/SwiftUICatalog.xcodeproj"
 if [[ "$mode" == verify ]]; then
   rm -rf -- "$output/simulator.xcresult"
