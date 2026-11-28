@@ -42,7 +42,7 @@ struct ShoppingSampleView: View {
     @State private var checkingOut = false
     @State private var loaded = false
     @State private var status: String?
-    @State private var error: String?
+    @State private var errorMessage: String?
     @State private var work: Task<Void, Never>?
 
     private static let disk = FixtureDisk("shopping.json", initial: ShoppingState(), byteLimit: 32_000)
@@ -98,7 +98,7 @@ struct ShoppingSampleView: View {
                     ProgressView("購入を再現中")
                     Button("中断する") { work?.cancel() }
                 }
-                if let error { Label(error, systemImage: "exclamationmark.circle").foregroundStyle(.red) }
+                if let errorMessage { Label(errorMessage, systemImage: "exclamationmark.circle").foregroundStyle(.red) }
                 if let status { Text(status).foregroundStyle(.secondary) }
             }
             Section("購入の再現履歴") {
@@ -150,7 +150,7 @@ struct ShoppingSampleView: View {
                 Button("カートに追加") { updateQuantity(quantity + 1, for: product) }
                     .disabled(!loaded || work != nil || quantity >= product.available)
                 if quantity > 0 { Text("カートに\(quantity)点") }
-                if let error { Text(error).foregroundStyle(.red) }
+                if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
                 if let status { Text(status).foregroundStyle(.secondary) }
             }
         }
@@ -159,14 +159,14 @@ struct ShoppingSampleView: View {
 
     private func load() {
         guard !loaded, work == nil else { return }
-        error = nil
+        errorMessage = nil
         work = Task {
             defer { work = nil }
             do {
                 state = try await Self.disk.read()
                 loaded = true
             } catch {
-                error = "カートを読み込めませんでした。端末の空き容量を確認してください。"
+                errorMessage = "カートを読み込めませんでした。端末の空き容量を確認してください。"
             }
         }
     }
@@ -192,7 +192,7 @@ struct ShoppingSampleView: View {
         let order = FixtureOrder(id: UUID(), timestamp: .now, units: snapshot.values.reduce(0, +), totalYen: total)
         let decline = simulateDecline
         status = nil
-        error = nil
+        errorMessage = nil
         checkingOut = true
         work = Task {
             let start = ContinuousClock.now
@@ -200,7 +200,7 @@ struct ShoppingSampleView: View {
             do {
                 try await Task.sleep(for: .milliseconds(800))
                 if decline {
-                    error = "決済エラーを再現しました。設定を解除すると再試行できます。"
+                    errorMessage = "決済エラーを再現しました。設定を解除すると再試行できます。"
                     await diagnostics?.record(sample: .shopping, action: .process, outcome: .failure)
                     return
                 }
@@ -218,10 +218,10 @@ struct ShoppingSampleView: View {
                 await diagnostics?.record(sample: .shopping, action: .process, outcome: .cancelled)
             } catch is CheckoutConflict {
                 if let refreshed = try? await Self.disk.read() { state = refreshed }
-                error = "カートの内容が変わりました。確認してから再試行してください。"
+                errorMessage = "カートの内容が変わりました。確認してから再試行してください。"
                 await diagnostics?.record(sample: .shopping, action: .process, outcome: .failure)
             } catch {
-                error = "購入履歴を保存できませんでした。空き容量を確認して再試行してください。"
+                errorMessage = "購入履歴を保存できませんでした。空き容量を確認して再試行してください。"
                 await diagnostics?.record(sample: .shopping, action: .save, outcome: .failure)
             }
         }
@@ -231,7 +231,7 @@ struct ShoppingSampleView: View {
 
     private func change(_ edit: @escaping @Sendable (inout ShoppingState) -> Void) {
         guard loaded, work == nil else { return }
-        error = nil
+        errorMessage = nil
         status = nil
         work = Task {
             let start = ContinuousClock.now
@@ -243,7 +243,7 @@ struct ShoppingSampleView: View {
             } catch is CancellationError {
                 await diagnostics?.record(sample: .shopping, action: .save, outcome: .cancelled)
             } catch {
-                error = "変更を保存できませんでした。空き容量を確認して再試行してください。"
+                errorMessage = "変更を保存できませんでした。空き容量を確認して再試行してください。"
                 await diagnostics?.record(sample: .shopping, action: .save, outcome: .failure)
             }
         }

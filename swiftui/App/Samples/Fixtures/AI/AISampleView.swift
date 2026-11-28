@@ -64,7 +64,7 @@ struct AISampleView: View {
     @State private var loaded = false
     @State private var simulateFailure = false
     @State private var status: String?
-    @State private var error: String?
+    @State private var errorMessage: String?
     @State private var work: Task<Void, Never>?
     @State private var responding = false
 
@@ -88,7 +88,7 @@ struct AISampleView: View {
                     ProgressView("再現応答を表示中")
                     Button("中断する") { work?.cancel() }
                 }
-                if let error { Label(error, systemImage: "exclamationmark.circle").foregroundStyle(.red) }
+                if let errorMessage { Label(errorMessage, systemImage: "exclamationmark.circle").foregroundStyle(.red) }
                 if let status { Text(status).foregroundStyle(.secondary) }
             }
             Section("会話の履歴") {
@@ -122,7 +122,7 @@ struct AISampleView: View {
 
     private func load() {
         guard !loaded, work == nil else { return }
-        error = nil
+        errorMessage = nil
         work = Task {
             defer { work = nil }
             do {
@@ -137,7 +137,7 @@ struct AISampleView: View {
             } catch is CancellationError {
                 return
             } catch {
-                error = "履歴を読み込めませんでした。端末の空き容量を確認してください。"
+                errorMessage = "履歴を読み込めませんでした。端末の空き容量を確認してください。"
             }
         }
     }
@@ -145,7 +145,7 @@ struct AISampleView: View {
     private func startPrompt() {
         let question = prompt.trimmedForFixture
         guard !question.isEmpty, question.fitsFixtureLimit(300) else {
-            error = "質問を300文字以内で入力してください。"
+            errorMessage = "質問を300文字以内で入力してください。"
             return
         }
         generate(prompt: question, id: UUID(), clearsDraft: true)
@@ -155,7 +155,7 @@ struct AISampleView: View {
         guard loaded, work == nil else { return }
         let fails = simulateFailure
         status = nil
-        error = nil
+        errorMessage = nil
         responding = true
         work = Task {
             let start = ContinuousClock.now
@@ -192,7 +192,7 @@ struct AISampleView: View {
             } catch is CancellationError {
                 await diagnostics?.record(sample: .ai, action: .process, outcome: .cancelled)
             } catch {
-                error = "履歴を保存できませんでした。空き容量を確認して再試行してください。"
+                errorMessage = "履歴を保存できませんでした。空き容量を確認して再試行してください。"
                 await diagnostics?.record(sample: .ai, action: .save, outcome: .failure)
             }
         }

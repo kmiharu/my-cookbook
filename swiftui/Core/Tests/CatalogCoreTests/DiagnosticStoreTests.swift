@@ -90,3 +90,20 @@ private func temporaryDirectory() -> URL {
     #expect(snapshot.report.days.last?.metrics.reduce(0) { $0 + $1.count } == 1_024)
     #expect(snapshot.report.days.first?.recentOperations.count == 1)
 }
+
+@Test func distinguishesMeasurementsAcrossAppUpdates() async throws {
+    let directory = temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let previous = DiagnosticStore(directory: directory, metadata: metadata, now: { today })
+    await previous.record(sample: .search, action: .process, outcome: .success, milliseconds: 80)
+    #expect(await previous.flush())
+
+    let update = DiagnosticMetadata(version: "1.1", build: "43", revision: "f12345", operatingSystem: "test", device: "fixture")
+    let current = DiagnosticStore(directory: directory, metadata: update, now: { today + 60 })
+    await current.record(sample: .search, action: .process, outcome: .success, milliseconds: 30)
+    let snapshot = await current.snapshot()
+    let summary = try #require(snapshot.report.days.first)
+    #expect(snapshot.report.app == update)
+    #expect(summary.metrics.compactMap(\.recordedBy?.build) == ["42", "43"])
+    #expect(summary.metrics.map(\.totalMilliseconds) == [80, 30])
+}

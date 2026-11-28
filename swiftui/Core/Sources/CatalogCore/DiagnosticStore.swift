@@ -30,10 +30,17 @@ public struct DiagnosticMetadata: Codable, Equatable, Sendable {
     }
 }
 
+public struct DiagnosticBuild: Codable, Equatable, Sendable {
+    public let version: String
+    public let build: String
+    public let revision: String
+}
+
 public struct DiagnosticMetric: Codable, Sendable {
     public let sample: SampleID
     public let action: DiagnosticAction
     public let outcome: DiagnosticOutcome
+    public let recordedBy: DiagnosticBuild?
     public private(set) var count = 0
     public private(set) var measuredCount = 0
     public private(set) var totalMilliseconds = 0.0
@@ -51,9 +58,11 @@ public struct DiagnosticMetric: Codable, Sendable {
 
 public struct DiagnosticOperation: Codable, Sendable {
     public let date: Date
+    public let milliseconds: Double?
     public let sample: SampleID
     public let action: DiagnosticAction
     public let outcome: DiagnosticOutcome
+    public let recordedBy: DiagnosticBuild?
 }
 
 public struct DiagnosticDay: Codable, Sendable {
@@ -69,9 +78,11 @@ private struct RecordedOperation: Codable {
     let action: DiagnosticAction
     let outcome: DiagnosticOutcome
     let milliseconds: Double?
+    let recordedBy: DiagnosticBuild?
 
     var summary: DiagnosticOperation {
-        DiagnosticOperation(date: date, sample: sample, action: action, outcome: outcome)
+        DiagnosticOperation(date: date, milliseconds: milliseconds, sample: sample, action: action, outcome: outcome,
+                            recordedBy: recordedBy)
     }
 }
 
@@ -106,10 +117,12 @@ private struct StoredDay: Codable {
         for record in operations + frameSamples {
             if let index = metrics.firstIndex(where: {
                 $0.sample == record.sample && $0.action == record.action && $0.outcome == record.outcome
+                    && $0.recordedBy == record.recordedBy
             }) {
                 metrics[index].add(record.milliseconds)
             } else {
-                var metric = DiagnosticMetric(sample: record.sample, action: record.action, outcome: record.outcome)
+                var metric = DiagnosticMetric(sample: record.sample, action: record.action, outcome: record.outcome,
+                                              recordedBy: record.recordedBy)
                 metric.add(record.milliseconds)
                 metrics.append(metric)
             }
@@ -145,6 +158,7 @@ public actor DiagnosticStore {
 
     private let directory: URL
     private let metadata: DiagnosticMetadata
+    private let build: DiagnosticBuild
     private let now: @Sendable () -> Date
     private var days: [Date: StoredDay] = [:]
     private var dirty: Set<Date> = []
@@ -155,6 +169,7 @@ public actor DiagnosticStore {
     public init(directory: URL, metadata: DiagnosticMetadata, now: @escaping @Sendable () -> Date = { .now }) {
         self.directory = directory
         self.metadata = metadata
+        self.build = DiagnosticBuild(version: metadata.version, build: metadata.build, revision: metadata.revision)
         self.now = now
     }
 
@@ -166,16 +181,21 @@ public actor DiagnosticStore {
         let start = Self.dayStart(date)
         var day = days[start] ?? StoredDay()
         let duration = milliseconds.flatMap { $0.isFinite && (0...86_400_000).contains($0) ? $0 : nil }
-        day.add(RecordedOperation(date: date, sample: sample, action: action, outcome: outcome, milliseconds: duration))
+        day.add(RecordedOperation(
+            date: date, sample: sample, action: action, outcome: outcome, milliseconds: duration, recordedBy: build
+        ))
         days[start] = day
         dirty.insert(start)
         scheduleFlush()
     }
 
     public func flush() -> Bool {
+        flush(at: now())
+    }
+
+    private func flush(at date: Date) -> Bool {
         pendingFlush?.cancel()
         pendingFlush = nil
-        let date = now()
         prepare(at: date)
         guard loaded else { return false }
         let cutoff = Self.cutoff(date)
@@ -202,8 +222,8 @@ public actor DiagnosticStore {
     }
 
     public func snapshot() -> (report: DiagnosticReport, storageAvailable: Bool) {
-        let available = flush()
         let date = now()
+        let available = flush(at: date)
         return (DiagnosticReport(
             schemaVersion: 1, periodStartUTC: Self.cutoff(date), generatedAt: date,
             retentionDays: Self.retentionDays, app: metadata,

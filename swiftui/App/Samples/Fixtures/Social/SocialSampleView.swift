@@ -47,7 +47,7 @@ struct SocialSampleView: View {
     @State private var simulateFailure = false
     @State private var loaded = false
     @State private var status: String?
-    @State private var error: String?
+    @State private var errorMessage: String?
     @State private var work: Task<Void, Never>?
     @State private var paging: Task<Void, Never>?
 
@@ -85,7 +85,7 @@ struct SocialSampleView: View {
                     ProgressView("処理中")
                     Button("中断する") { work?.cancel() }
                 }
-                if let error { Label(error, systemImage: "exclamationmark.circle").foregroundStyle(.red) }
+                if let errorMessage { Label(errorMessage, systemImage: "exclamationmark.circle").foregroundStyle(.red) }
                 if let status { Text(status).foregroundStyle(.secondary) }
                 if !loaded && work == nil { Button("読み込みを再試行") { load() } }
             }
@@ -137,7 +137,7 @@ struct SocialSampleView: View {
             } catch is CancellationError {
                 return
             } catch {
-                error = "下書きと投稿を読み込めませんでした。端末の空き容量を確認してください。"
+                errorMessage = "下書きと投稿を読み込めませんでした。端末の空き容量を確認してください。"
             }
         }
     }
@@ -153,7 +153,7 @@ struct SocialSampleView: View {
             } catch is CancellationError {
                 await diagnostics?.record(sample: .social, action: .load, outcome: .cancelled)
             } catch {
-                error = "投稿を読み込めませんでした。読み込みを再試行してください。"
+                errorMessage = "投稿を読み込めませんでした。読み込みを再試行してください。"
                 await diagnostics?.record(sample: .social, action: .load, outcome: .failure)
             }
         }
@@ -164,28 +164,28 @@ struct SocialSampleView: View {
         defer { imageLoading = false }
         do {
             guard let result = try await item.loadTransferable(type: FixtureAttachment.self) else {
-                error = "画像を準備できませんでした。32 MB・1億画素以下の別の写真を選んでください。"
+                errorMessage = "画像を準備できませんでした。32 MB・1億画素以下の別の写真を選んでください。"
                 return
             }
             try Task.checkCancellation()
             draft.attachment = result
-            error = nil
+            errorMessage = nil
         } catch is CancellationError {
             return
         } catch {
-            error = "画像を準備できませんでした。32 MB・1億画素以下の別の写真を選んでください。"
+            errorMessage = "画像を準備できませんでした。32 MB・1億画素以下の別の写真を選んでください。"
         }
     }
 
     private func saveDraft() {
-        guard draft.text.fitsFixtureLimit(500) else { error = "本文を500文字以内にしてください。"; return }
+        guard draft.text.fitsFixtureLimit(500) else { errorMessage = "本文を500文字以内にしてください。"; return }
         let snapshot = draft
         change(message: "下書きを保存しました") { $0.draft = snapshot }
     }
 
     private func publish() {
         let text = draft.text.trimmedForFixture
-        guard text.fitsFixtureLimit(500) else { error = "本文を500文字以内にしてください。"; return }
+        guard text.fitsFixtureLimit(500) else { errorMessage = "本文を500文字以内にしてください。"; return }
         let post = SocialPost(id: UUID().uuidString, author: "あなた（端末内）", text: text, attachment: draft.attachment)
         change(message: "投稿の再現が完了しました", publishing: true) { value in
             value.posts.insert(post, at: 0)
@@ -204,7 +204,7 @@ struct SocialSampleView: View {
 
     private func change(message: String? = nil, publishing: Bool = false, edit: @escaping @Sendable (inout SocialState) -> Void) {
         guard loaded, work == nil else { return }
-        error = nil
+        errorMessage = nil
         status = nil
         let fail = simulateFailure
         work = Task {
@@ -214,7 +214,7 @@ struct SocialSampleView: View {
                 if publishing { try await Task.sleep(for: .milliseconds(550)) }
                 try Task.checkCancellation()
                 if publishing && fail {
-                    error = "投稿できませんでした。投稿エラーの設定を確認してから再試行してください。"
+                    errorMessage = "投稿できませんでした。投稿エラーの設定を確認してから再試行してください。"
                     await diagnostics?.record(sample: .social, action: .process, outcome: .failure)
                     return
                 }
@@ -225,7 +225,7 @@ struct SocialSampleView: View {
             } catch is CancellationError {
                 await diagnostics?.record(sample: .social, action: .save, outcome: .cancelled)
             } catch {
-                error = "変更を保存できませんでした。空き容量を確認して再試行してください。"
+                errorMessage = "変更を保存できませんでした。空き容量を確認して再試行してください。"
                 await diagnostics?.record(sample: .social, action: .save, outcome: .failure)
             }
         }

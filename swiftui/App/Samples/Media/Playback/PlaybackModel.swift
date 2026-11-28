@@ -47,7 +47,7 @@ final class PlaybackModel {
     private(set) var firstFrameMilliseconds: Double?
     private(set) var stalls = 0
     private(set) var stalledSeconds = 0.0
-    private(set) var averageVideoBitrate: Double?
+    private(set) var indicatedBitrate: Double?
     private(set) var failureMessage: String?
     private(set) var generation = 0
 
@@ -55,6 +55,7 @@ final class PlaybackModel {
     @ObservationIgnored private var requestedAt: ContinuousClock.Instant?
     @ObservationIgnored private var stalledAt: ContinuousClock.Instant?
     @ObservationIgnored private var lastTelemetryAt: ContinuousClock.Instant?
+    @ObservationIgnored private var bitrateFetchPending = false
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var finishedObserver: (any NSObjectProtocol)?
@@ -79,7 +80,7 @@ final class PlaybackModel {
         firstFrameMilliseconds = nil
         stalls = 0
         stalledSeconds = 0
-        averageVideoBitrate = nil
+        indicatedBitrate = nil
         failureMessage = nil
         hasPlayed = false
         guard let url = source.url else {
@@ -126,7 +127,7 @@ final class PlaybackModel {
             MainActor.assumeIsolated { self?.updateTime(seconds, token: token) }
         }
         finishedObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
+            forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.finish(token: token) }
         }
@@ -191,6 +192,7 @@ final class PlaybackModel {
         endStall(outcome: .cancelled)
         startupWatchdog?.cancel()
         startupWatchdog = nil
+        bitrateFetchPending = false
         observations.removeAll()
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         timeObserver = nil
@@ -268,13 +270,19 @@ final class PlaybackModel {
     }
 
     private func updateTime(_ seconds: Double, token: Int) {
-        guard token == generation, seconds.isFinite else { return }
+        guard token == generation, seconds.isFinite, let item = player.currentItem else { return }
         self.seconds = max(seconds, 0)
-        if let duration = player.currentItem?.duration.seconds, duration.isFinite { self.duration = max(0, duration) }
-        if let lastTelemetryAt, lastTelemetryAt.duration(to: clock.now) >= .seconds(5) {
-            self.lastTelemetryAt = clock.now
-            if let bitrate = player.currentItem?.accessLog()?.events.last?.indicatedBitrate, bitrate > 0 {
-                averageVideoBitrate = bitrate
+        if item.duration.seconds.isFinite { duration = max(0, item.duration.seconds) }
+        guard source == .stream, !bitrateFetchPending, let lastTelemetryAt,
+              lastTelemetryAt.duration(to: clock.now) >= .seconds(5) else { return }
+        self.lastTelemetryAt = clock.now
+        bitrateFetchPending = true
+        item.fetchAccessLog { [weak self] log in
+            let bitrate = log?.events.last?.indicatedBitrate
+            Task { @MainActor [weak self] in
+                guard let self, token == generation else { return }
+                bitrateFetchPending = false
+                if let bitrate, bitrate.isFinite, bitrate > 0 { indicatedBitrate = bitrate }
             }
         }
     }

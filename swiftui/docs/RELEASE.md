@@ -121,4 +121,4 @@ asc "$apple/apps/$ASC_APP_ID/betaGroups" \
 | 実機インストールと起動 | 機種、OS、バージョン・ビルド番号、診断共有 | 未確認 |
 | サンプルの実機検証 | サンプル別の条件、回数、計測値、診断 | 未確認 |
 
-調査時点のCloud環境にはGitHubのCLI接続だけが設定されていた。Codemagic APIの認証、Apple側へのアクセス、アプリ登録やテスターは、この環境から確認できていない。必要となるのは、専用Codemagic AppのIDと権限、Apple Developerチームと専用Bundle IDの登録、App Store ConnectアプリのApple ID、署名・アップロード用の安全な設定、対象テスターグループ。秘密値は共有せず、承認済みサービス側で設定する。
+GitHub は CLI とコネクタを利用できた。Codemagic と App Store Connect の照会 API はこの環境から到達できたが、資格情報のバインドがなく HTTP 401 となった。専用登録やテスターの現状は未確認。必要となるのは、専用Codemagic AppのIDと権限、Apple Developerチームと専用Bundle IDの登録、App Store ConnectアプリのApple ID、署名・アップロード用の安全な設定、対象テスターグループ。秘密値は共有せず、承認済みサービス側で設定する。

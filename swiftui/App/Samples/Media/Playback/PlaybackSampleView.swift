@@ -1,4 +1,5 @@
 import AVFoundation
+import CatalogCore
 import SwiftUI
 import UIKit
 
@@ -71,7 +72,7 @@ struct PlaybackSampleView: View {
                 if source == .stream { metric("映像の表示準備完了", model.firstFrameMilliseconds) }
                 LabeledContent("再バッファ", value: "\(model.stalls) 回")
                 LabeledContent("再バッファの合計", value: "\(model.stalledSeconds.formatted(.number.precision(.fractionLength(1)))) 秒")
-                if let bitrate = model.averageVideoBitrate {
+                if let bitrate = model.indicatedBitrate {
                     LabeledContent("配信の選択レート", value: "\(Int(bitrate / 1_000)) kbps")
                 }
             }

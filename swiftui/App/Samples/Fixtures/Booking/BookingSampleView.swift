@@ -22,7 +22,7 @@ struct BookingSampleView: View {
     @State private var submitting = false
     @State private var confirmingCancel = false
     @State private var status: String?
-    @State private var error: String?
+    @State private var errorMessage: String?
     @State private var work: Task<Void, Never>?
 
     private static let disk = FixtureDisk("booking.json", initial: BookingState(), byteLimit: 32_000)
@@ -74,7 +74,7 @@ struct BookingSampleView: View {
                     ProgressView("処理中")
                     Button("中断する") { work?.cancel() }
                 }
-                if let error { Label(error, systemImage: "exclamationmark.circle").foregroundStyle(.red) }
+                if let errorMessage { Label(errorMessage, systemImage: "exclamationmark.circle").foregroundStyle(.red) }
                 if let status { Text(status).foregroundStyle(.secondary) }
                 if let pending, !submitting {
                     Button("同じ操作を再試行") { send(pending, failure: .none) }
@@ -117,14 +117,14 @@ struct BookingSampleView: View {
 
     private func load() {
         guard !loaded, work == nil else { return }
-        error = nil
+        errorMessage = nil
         work = Task {
             defer { work = nil }
             do {
                 state = try await Self.disk.read()
                 loaded = true
             } catch {
-                error = "予約を読み込めませんでした。端末の空き容量を確認してください。"
+                errorMessage = "予約を読み込めませんでした。端末の空き容量を確認してください。"
             }
         }
     }
@@ -137,9 +137,9 @@ struct BookingSampleView: View {
                 let refreshed = try await Self.disk.read()
                 applyRefreshedState(refreshed)
                 status = refreshed.receipts.contains(command) ? "操作が保存されています（再現）" : "操作は保存されていません"
-                error = nil
+                errorMessage = nil
             } catch {
-                error = "予約状態を確認できません。端末の空き容量を確認して再試行してください。"
+                errorMessage = "予約状態を確認できません。端末の空き容量を確認して再試行してください。"
             }
         }
     }
@@ -161,7 +161,7 @@ struct BookingSampleView: View {
     private func send(_ command: BookingCommand, failure: Failure) {
         guard loaded, work == nil else { return }
         pending = command
-        error = nil
+        errorMessage = nil
         status = nil
         submitting = true
         work = Task {
@@ -186,13 +186,13 @@ struct BookingSampleView: View {
                     applyRefreshedState(refreshed)
                     status = refreshed.receipts.contains(command) ? "中断前に操作が保存されました（再現）" : "処理を中断しました"
                 } else {
-                    error = "予約状態を確認できません。同じ操作を再試行してください。"
+                    errorMessage = "予約状態を確認できません。同じ操作を再試行してください。"
                 }
                 await diagnostics?.record(sample: .booking, action: .process, outcome: .cancelled)
             } catch let failure as SimulatedFailure {
                 switch failure {
-                case .beforeSaving: error = "保存前のエラーです。同じ操作を再試行できます。"
-                case .afterSaving: error = "応答が途切れました。同じ操作を再試行して結果を確認できます。"
+                case .beforeSaving: errorMessage = "保存前のエラーです。同じ操作を再試行できます。"
+                case .afterSaving: errorMessage = "応答が途切れました。同じ操作を再試行して結果を確認できます。"
                 }
                 await diagnostics?.record(sample: .booking, action: .process, outcome: .failure, milliseconds: fixtureElapsedMilliseconds(since: start))
             } catch let rejection as BookingState.Rejection {
@@ -200,12 +200,12 @@ struct BookingSampleView: View {
                 pending = nil
                 selected = nil
                 switch rejection {
-                case .invalidSlot: error = "この枠は選べません。日時を選び直してください。"
-                case .conflict, .conflictingRetry: error = "予約内容が変わりました。確認してから操作してください。"
+                case .invalidSlot: errorMessage = "この枠は選べません。日時を選び直してください。"
+                case .conflict, .conflictingRetry: errorMessage = "予約内容が変わりました。確認してから操作してください。"
                 }
                 await diagnostics?.record(sample: .booking, action: .process, outcome: .failure)
             } catch {
-                error = "予約を保存できませんでした。空き容量を確認してから同じ操作を再試行してください。"
+                errorMessage = "予約を保存できませんでした。空き容量を確認してから同じ操作を再試行してください。"
                 await diagnostics?.record(sample: .booking, action: .save, outcome: .failure)
             }
         }

@@ -15,14 +15,12 @@ enum ConnectionMode: String {
     case local = "端末内"
     case fixture = "再現データ"
     case localAndFixture = "端末内・再現データ"
-    case connected = "実接続"
     case mixed = "実接続・再現データ"
 
     var icon: String {
         switch self {
         case .local: "iphone"
         case .fixture, .localAndFixture: "doc.on.doc"
-        case .connected: "network"
         case .mixed: "arrow.triangle.branch"
         }
     }
@@ -49,7 +47,7 @@ struct CatalogEntry: Identifiable {
               mode: .fixture, description: "条件で絞り込み、並べ替え、候補を比較します。使った条件を保存して呼び出せます。",
               requirements: "1 万件の再現データを端末内で検索します。", keywords: "検索 大量データ キャンセル"),
         .init(id: .map, group: .discover, title: "近くを探して移動する", purpose: "地図・現在地・周辺・経路", icon: "map",
-              mode: .connected, description: "地図から出発地を選び、施設を探して歩く経路を表示します。現在地の取得は任意です。",
+              mode: .mixed, description: "東京駅や現在地の周辺を検索し、施設への徒歩経路を表示します。場所と直線経路の見本もあります。",
               requirements: "周辺検索と経路には通信が必要です。現在地を使う場合は、使用中の位置情報を許可します。", keywords: "移動 位置情報 経路 MapKit"),
         .init(id: .learning, group: .discover, title: "教材で学ぶ", purpose: "読み上げ・クイズ・学習の進み具合", icon: "book",
               mode: .local, description: "教材を読み、読み上げを聞き、クイズに答えて学習履歴を残します。",
@@ -91,7 +89,7 @@ struct CatalogEntry: Identifiable {
               mode: .mixed, description: "HLS 動画と端末内の短いテスト音声を再生します。準備完了、最初のフレーム、再バッファを診断で確認できます。",
               requirements: "HLS には Apple の公開テスト配信と通信が必要です。端末内の音声は通信なしで試せます。", keywords: "動画 音声 HLS AVPlayer AVKit"),
         .init(id: .spatial, group: .device, title: "遊ぶ・空間に置く", purpose: "ミニゲーム・AR の配置と操作", icon: "arkit",
-              mode: .local, description: "ミニゲームで操作を試し、対応端末では AR で物体を配置して動かします。",
+              mode: .local, description: "ミニゲームで操作を試し、対応端末では AR でブロックを置き、追跡と配置をリセットできます。",
               requirements: "AR は対応する iPhone とカメラ許可が必要です。ゲームはカメラなしで遊べます。", keywords: "ゲーム AR ARKit RealityKit 追跡"),
         .init(id: .bluetooth, group: .device, title: "Bluetooth 機器とつなぐ", purpose: "探索・接続・機器情報の読み取り", icon: "antenna.radiowaves.left.and.right",
               mode: .mixed, description: "機器を探し、接続して情報と電波の強さを読み取ります。再現モードでも接続や切断を試せます。",
