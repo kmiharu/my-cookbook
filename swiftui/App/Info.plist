@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>ja</string>
+    <key>CFBundleDisplayName</key><string>SwiftUI サンプル</string>
+    <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>CatalogSourceRevision</key><string>$(CATALOG_SOURCE_REVISION)</string>
+    <key>NSCameraUsageDescription</key><string>日記用の写真を撮影し、AR で周囲を認識するためにカメラを使います。</string>
+    <key>NSMicrophoneUsageDescription</key><string>日記に音声メモを残すためにマイクを使います。</string>
+    <key>NSLocationWhenInUseUsageDescription</key><string>地図で現在地を表示し、周辺の検索や経路の出発地に使います。</string>
+    <key>NSBluetoothAlwaysUsageDescription</key><string>選んだ Bluetooth 機器に接続し、機器情報と電波の強さを読み取ります。</string>
+    <key>UILaunchScreen</key><dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+</dict>
+</plist>
