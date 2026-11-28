@@ -30,7 +30,7 @@
 
 ## 確定したコミットをビルドする
 
-1. GitHubの変更ブランチまたはタグと、その完全なコミットSHAを確定する。macOSでの再現はリポジトリ直下から `bash swiftui/ci/ios.sh verify` を実行する。GitHub Actions では同じスクリプトに `CATALOG_UNSIGNED_ARCHIVE=1` と `CATALOG_SIMULATOR_SMOKE=1` を渡す。Core と予約の検査、iPhone 17 Simulator コンパイル、実機 SDK の署名なし Release アーカイブ、Simulator の起動画像を確認する。
+1. GitHubの変更ブランチまたはタグと、その完全なコミットSHAを確定する。macOSでの再現はリポジトリ直下から `bash swiftui/ci/ios.sh verify` を実行する。GitHub Actions の push 検証では Core と予約の検査、iPhone 17 Simulator コンパイル、実機 SDK の署名なし Release アーカイブを確認する。手動実行の `workflow_dispatch` は Simulator の起動と画像も検証する。macOS では `CATALOG_UNSIGNED_ARCHIVE=1 CATALOG_SIMULATOR_SMOKE=1 bash swiftui/ci/ios.sh verify` で同じ条件を再現できる。
 2. Codemagicでは `swiftui-simulator` がCoreテストとSimulatorコンパイル、`swiftui-testflight` がCoreテストと署名済みIPAの作成・アップロードを行う。配信時は対象バージョンの登録済みビルド番号をApple側で照会し、次に利用する整数の番号を選ぶ。
 3. CodemagicのアプリIDと実行中のビルドを確認する。GitHub上のSHAをAPI overrideとして渡し、実行時のcheckoutと照合する。参照するブランチが起動の前後に進んだ場合はビルドを中止する。必要に応じてAPIの `branch` を `tag` に替える。
 

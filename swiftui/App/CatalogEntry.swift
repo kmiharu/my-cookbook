@@ -96,7 +96,7 @@ struct CatalogEntry: Identifiable {
               requirements: "実接続は Bluetooth の許可と BLE 周辺機器が必要です。読み取れる情報は機器の仕様で異なります。", keywords: "機器 BLE CoreBluetooth 接続 RSSI")
     ]
 
-    @ViewBuilder var screen: some View {
+    @MainActor @ViewBuilder var screen: some View {
         switch id {
         case .catalog: DiagnosticsView()
         case .feed: FeedSampleView()
