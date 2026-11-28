@@ -2,6 +2,7 @@ import AVFoundation
 import CatalogCore
 import PhotosUI
 import SwiftUI
+import UIKit
 
 struct DiarySampleView: View {
     private struct PhotoRequest {

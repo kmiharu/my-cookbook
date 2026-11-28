@@ -3,6 +3,7 @@ import AVFoundation
 import CatalogCore
 import RealityKit
 import SwiftUI
+import UIKit
 
 struct SpatialSampleView: View {
     enum Mode: String, CaseIterable, Identifiable {

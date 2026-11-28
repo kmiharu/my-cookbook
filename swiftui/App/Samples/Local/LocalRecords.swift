@@ -27,7 +27,7 @@ private actor LocalJSON<Value: Codable & Sendable> {
     func load(defaultValue: Value) throws -> Value {
         do {
             return try JSONDecoder().decode(Value.self, from: Data(contentsOf: file))
-        } catch CocoaError.fileReadNoSuchFile {
+        } catch let error as CocoaError where [.fileNoSuchFile, .fileReadNoSuchFile].contains(error.code) {
             return defaultValue
         }
     }

@@ -86,8 +86,9 @@ final class DiaryAudio {
             guard player.duration.isFinite, player.duration > 0, player.play() else { throw DiaryAudioError.cannotPlay }
             self.player = player
             isPlaying = true
+            let duration = min(Self.maximumSeconds, player.duration)
             operation = Task { [weak self] in
-                do { try await Task.sleep(for: .seconds(min(Self.maximumSeconds, player.duration))) } catch { return }
+                do { try await Task.sleep(for: .seconds(duration)) } catch { return }
                 self?.stopPlayback()
             }
         } catch {

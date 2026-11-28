@@ -1,5 +1,6 @@
 import AVFoundation
 import SwiftUI
+import UIKit
 
 struct PlaybackSampleView: View {
     @Environment(\.diagnostics) private var diagnostics
@@ -35,9 +36,8 @@ struct PlaybackSampleView: View {
                 if model.status == .loading || model.status == .waiting {
                     ProgressView().accessibilityLabel(model.status.label)
                 }
-                if model.status == .failed {
-                    Text("通信状態を確認して、もう一度お試しください。確認音なら通信せずに再生できます。")
-                        .foregroundStyle(.secondary)
+                if model.status == .failed, let message = model.failureMessage {
+                    Text(message).foregroundStyle(.secondary)
                 }
                 if model.duration > 0 && model.status != .idle && model.status != .failed {
                     Slider(
@@ -81,6 +81,9 @@ struct PlaybackSampleView: View {
         .onChange(of: source) { _, _ in model.release() }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { model.release(rememberPosition: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in
+            if model.status != .idle { model.release(rememberPosition: true) }
         }
         .onDisappear { model.release() }
     }

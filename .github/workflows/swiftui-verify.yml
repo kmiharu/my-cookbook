@@ -25,11 +25,14 @@ jobs:
       - name: Verify Swift package and build iOS Simulator app
         env:
           DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+          CATALOG_SIMULATOR_SMOKE: "1"
         run: bash swiftui/ci/ios.sh verify
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: swiftui-simulator-xcresult
-          path: swiftui/build/verify/simulator.xcresult.zip
+          path: |
+            swiftui/build/verify/simulator.xcresult
+            swiftui/build/verify/catalog-launch.png.zip
           if-no-files-found: ignore
           retention-days: 7

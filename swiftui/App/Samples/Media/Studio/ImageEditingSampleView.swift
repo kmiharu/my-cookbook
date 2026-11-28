@@ -1,6 +1,7 @@
 import CatalogCore
 import PhotosUI
 import SwiftUI
+import UIKit
 
 struct ImageEditingSampleView: View {
     @Environment(\.diagnostics) private var diagnostics

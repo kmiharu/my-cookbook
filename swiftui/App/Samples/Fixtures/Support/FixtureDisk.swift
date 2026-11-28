@@ -26,7 +26,7 @@ actor FixtureDisk<Value: Codable & Sendable> {
             let data = try handle.read(upToCount: byteLimit + 1) ?? Data()
             guard data.count <= byteLimit else { throw StorageError.fileTooLarge }
             return try JSONDecoder().decode(Value.self, from: data)
-        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+        } catch let error as CocoaError where [.fileNoSuchFile, .fileReadNoSuchFile].contains(error.code) {
             return initialValue
         }
     }

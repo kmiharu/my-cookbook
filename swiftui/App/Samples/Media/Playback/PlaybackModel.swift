@@ -48,6 +48,7 @@ final class PlaybackModel {
     private(set) var stalls = 0
     private(set) var stalledSeconds = 0.0
     private(set) var averageVideoBitrate: Double?
+    private(set) var failureMessage: String?
     private(set) var generation = 0
 
     private let clock = ContinuousClock()
@@ -59,6 +60,7 @@ final class PlaybackModel {
     @ObservationIgnored private var finishedObserver: (any NSObjectProtocol)?
     @ObservationIgnored private var diagnostics: DiagnosticStore?
     @ObservationIgnored private var startupWatchdog: Task<Void, Never>?
+    @ObservationIgnored private var audioSessionActive = false
     private var source: PlaybackSource = .stream
     private var wantsPlayback = false
     private var hasPlayed = false
@@ -78,8 +80,21 @@ final class PlaybackModel {
         stalls = 0
         stalledSeconds = 0
         averageVideoBitrate = nil
+        failureMessage = nil
         hasPlayed = false
         guard let url = source.url else {
+            failureMessage = "同梱の素材を読み込めませんでした。もう一方の素材をお試しください。"
+            status = .failed
+            record(.load, outcome: .failure)
+            return
+        }
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback)
+            try session.setActive(true)
+            audioSessionActive = true
+        } catch {
+            failureMessage = "音声の再生を準備できませんでした。他の音声が停止してから再試行してください。"
             status = .failed
             record(.load, outcome: .failure)
             return
@@ -184,6 +199,10 @@ final class PlaybackModel {
         player.currentItem?.cancelPendingSeeks()
         player.pause()
         player.replaceCurrentItem(with: nil)
+        if audioSessionActive {
+            audioSessionActive = false
+            try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        }
         requestedAt = nil
         status = .idle
     }
@@ -272,6 +291,9 @@ final class PlaybackModel {
         endStall(outcome: .failure)
         status = .failed
         release()
+        failureMessage = source == .stream
+            ? "通信状態を確認して、もう一度お試しください。確認音なら通信せずに再生できます。"
+            : "確認音を再生できませんでした。もう一度お試しください。"
         status = .failed
     }
 

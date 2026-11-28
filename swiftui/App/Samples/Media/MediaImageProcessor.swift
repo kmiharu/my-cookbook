@@ -1,3 +1,4 @@
+import CoreGraphics
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import CoreTransferable
@@ -208,7 +209,7 @@ actor MediaImageProcessor {
 
     private static func jpeg(_ image: CGImage, quality: Double) throws -> Data {
         let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else {
+        guard let destination = CGImageDestinationCreateWithData(output as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil) else {
             throw MediaImageError.cannotWrite
         }
         CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
