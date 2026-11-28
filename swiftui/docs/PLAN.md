@@ -2,7 +2,8 @@
 
 対象は `kmiharu/my-cookbook` の `swiftui/`。調査時のベースは `e5e2429`。ルートの AGENTS.md に従い、既存サンプルと独立した題材フォルダに置く。参照した既存の iOS カメラアプリには署名なし Simulator ビルドの Codemagic 実績がある。そこで使うアプリやテスターは変更しない。配信権限と設定の詳細は [配信手順](RELEASE.md) に記録する。
 
-調査基準日は 2026-11-28。正式版 iOS 27.2.1 を検証基準、Deployment Target を iOS 27.2、Xcode 27.2 (27B52) と iOS 27.2 SDK、同梱 Swift 6.4 の Swift 6 言語モードを CI 基準とする。Codemagic の公開イメージで確認した。Linux は Foundation コアのテストとソースの構文確認を担う。  
+調査基準日は 2026-11-28。正式版 iOS 27.2.1 を検証基準、Deployment Target を iOS 27.2、Xcode 27.2 (27B52) と iOS 27.2 SDK、同梱 Swift 6.4 の Swift 6 言語モードを CI 基準とする。Codemagic の公開イメージで確認した。Linux は Foundation コアのテストとソースの構文確認を担う。
+
 [Apple セキュリティリリース](https://support.apple.com/ja-jp/100100) · [Xcode 27.2](https://developer.apple.com/documentation/xcode-release-notes/xcode-27_2-release-notes) · [Codemagic Xcode 27.2](https://docs.codemagic.io/specs-macos/xcode-27-2/)
 
 ## 段階と判定
