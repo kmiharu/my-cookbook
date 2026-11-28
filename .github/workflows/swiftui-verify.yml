@@ -33,7 +33,7 @@ jobs:
         with:
           name: swiftui-simulator-xcresult
           path: |
-            swiftui/build/verify/simulator.xcresult
-            swiftui/build/verify/catalog-launch.png.zip
+            swiftui/build/verify/simulator.xcresult.zip
+            swiftui/build/verify/catalog-launch.png
           if-no-files-found: ignore
           retention-days: 7

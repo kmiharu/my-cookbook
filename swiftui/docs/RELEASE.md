@@ -30,7 +30,7 @@
 
 ## 確定したコミットをビルドする
 
-1. GitHubの変更ブランチまたはタグと、その完全なコミットSHAを確定する。macOSでの再現はリポジトリ直下から `bash swiftui/ci/ios.sh verify` を実行する。GitHubのSimulatorチェックでも同じスクリプトを使う。署名前にCoreのテストとiPhone 17 Simulator向けのコンパイルを確認する。
+1. GitHubの変更ブランチまたはタグと、その完全なコミットSHAを確定する。macOSでの再現はリポジトリ直下から `bash swiftui/ci/ios.sh verify` を実行する。GitHub Actions では同じスクリプトに `CATALOG_UNSIGNED_ARCHIVE=1` と `CATALOG_SIMULATOR_SMOKE=1` を渡す。Core と予約の検査、iPhone 17 Simulator コンパイル、実機 SDK の署名なし Release アーカイブ、Simulator の起動画像を確認する。
 2. Codemagicでは `swiftui-simulator` がCoreテストとSimulatorコンパイル、`swiftui-testflight` がCoreテストと署名済みIPAの作成・アップロードを行う。配信時は対象バージョンの登録済みビルド番号をApple側で照会し、次に利用する整数の番号を選ぶ。
 3. CodemagicのアプリIDと実行中のビルドを確認する。GitHub上のSHAをAPI overrideとして渡し、実行時のcheckoutと照合する。参照するブランチが起動の前後に進んだ場合はビルドを中止する。必要に応じてAPIの `branch` を `tag` に替える。
 
@@ -81,7 +81,7 @@ cm "$api/builds/$CODEMAGIC_BUILD_ID/actions?page_size=100&page=1" \
 
 1. Codemagicの公開処理ステップでアップロード成功を確認する。`build-receipt.json` のBundle ID、バージョン、ビルド番号を控える。
 2. 専用App IDから `GET /v1/builds` を照会する。`filter[app]`、`filter[version]`（ビルド番号）、`filter[preReleaseVersion.version]`（バージョン）で絞り込み、該当するAppleビルドIDと `processingState` を確認する。Apple側の処理完了は `VALID` で判定する。処理失敗や輸出コンプライアンスの保留がある場合は、その状態とAppleからの通知を記録する。暗号化に関する申告は使用状況とAppleの質問に基づいて判断する。[List builds](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds)、[ビルドのステータス](https://developer.apple.com/help/app-store-connect/reference/app-uploads/app-build-statuses/)、[輸出コンプライアンス](https://developer.apple.com/help/app-store-connect/manage-app-information/overview-of-export-compliance/)
-3. `GET /v1/apps/{appId}/betaGroups` でカタログ専用グループを照合する。その `POST /v1/betaGroups/{groupId}/relationships/builds` に `{"data":[{"type":"builds","id":"APPLE_BUILD_ID"}]}` を送ってビルドを追加し、`GET /v1/betaGroups/{groupId}/builds` で反映を確認する。App Store Connect APIはAppleの手順に従って短命JWTで認証する。公開リンクや外部配布を選ぶ場合は、Apple側で該当ビルドのBeta App Reviewが完了していることを確認する。[Apple API認証](https://developer.apple.com/documentation/appstoreconnectapi/generating-tokens-for-api-requests)、[ビルドをグループに追加](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-betagroups-_id_-relationships-builds)、[Beta App Review](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-betaappreviewsubmissions)
+3. `GET /v1/apps/{appId}/betaGroups` でカタログ専用グループを照合する。内部テスター向けなら `isInternalGroup` が true であることを確認する。その `POST /v1/betaGroups/{groupId}/relationships/builds` に `{"data":[{"type":"builds","id":"APPLE_BUILD_ID"}]}` を送ってビルドを追加し、`GET /v1/betaGroups/{groupId}/builds` で反映を確認する。App Store Connect APIはAppleの手順に従って短命JWTで認証する。公開リンクや外部配布を選ぶ場合は、Apple側で該当ビルドのBeta App Reviewが完了していることを確認する。[Apple API認証](https://developer.apple.com/documentation/appstoreconnectapi/generating-tokens-for-api-requests)、[ビルドをグループに追加](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-betagroups-_id_-relationships-builds)、[Beta App Review](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-betaappreviewsubmissions)
 4. `GET /v1/builds/{buildId}/buildBetaDetail` と対象グループのテスターを照合する。配信済みの記録には対象グループと配信日時を残す。TestFlightに表示されることと端末で起動できることは、インストール後に別々に確認する。[Build Beta Details](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds-_id_-buildbetadetail)
 
 Codemagic YAMLの `submit_to_testflight` は、対象グループを上記の手順で選ぶため `false`。署名済みIPAのApp Store Connectアップロードは有効。既存グループで「自動配信」が設定されている場合は、アップロード前に専用アプリの対象グループと配信範囲を照合する。今回の配信操作はTestFlightまで。
