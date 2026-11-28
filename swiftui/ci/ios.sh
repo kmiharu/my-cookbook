@@ -73,6 +73,14 @@ if [[ "$mode" == verify ]]; then
   if [[ -d "$output/simulator.xcresult" ]]; then
     ditto -c -k --keepParent "$output/simulator.xcresult" "$output/simulator.xcresult.zip"
   fi
+  if [[ "$build_status" == 0 && "${CATALOG_UNSIGNED_ARCHIVE:-0}" == 1 ]]; then
+    xcodebuild archive -project "$project" -scheme SwiftUICatalog \
+      -configuration Release -destination 'generic/platform=iOS' \
+      -derivedDataPath "$temporary/device-derived" \
+      -archivePath "$temporary/unsigned/SwiftUICatalog.xcarchive" \
+      CODE_SIGNING_ALLOWED=NO "CATALOG_SOURCE_REVISION=$revision"
+    test -f "$temporary/unsigned/SwiftUICatalog.xcarchive/Info.plist"
+  fi
   if [[ "$build_status" == 0 && "${CATALOG_SIMULATOR_SMOKE:-0}" == 1 ]]; then
     device="$(xcrun simctl list devices available --json | python3 -c '
 import json
@@ -81,19 +89,19 @@ import sys
 devices = json.load(sys.stdin)["devices"]["com.apple.CoreSimulator.SimRuntime.iOS-27-2"]
 print(next(device["udid"] for device in devices if device["name"] == "iPhone 17"))
 ')"
-    xcrun simctl bootstatus "$device" -b
+    python3 - "$device" <<'PYBOOT'
+import subprocess
+import sys
+
+try:
+    subprocess.run(["xcrun", "simctl", "bootstatus", sys.argv[1], "-b"], check=True, timeout=180)
+except subprocess.TimeoutExpired:
+    raise SystemExit("iOS Simulator did not finish booting within 180 seconds")
+PYBOOT
     xcrun simctl install "$device" "$temporary/derived/Build/Products/Debug-iphonesimulator/SwiftUICatalog.app"
     xcrun simctl launch --terminate-running-process "$device" com.example.cookbook.swiftui
     sleep 3
     xcrun simctl io "$device" screenshot "$output/catalog-launch.png"
-  fi
-  if [[ "$build_status" == 0 && "${CATALOG_UNSIGNED_ARCHIVE:-0}" == 1 ]]; then
-    xcodebuild archive -project "$project" -scheme SwiftUICatalog \
-      -configuration Release -destination 'generic/platform=iOS' \
-      -derivedDataPath "$temporary/device-derived" \
-      -archivePath "$temporary/unsigned/SwiftUICatalog.xcarchive" \
-      CODE_SIGNING_ALLOWED=NO "CATALOG_SOURCE_REVISION=$revision"
-    test -f "$temporary/unsigned/SwiftUICatalog.xcarchive/Info.plist"
   fi
   exit "$build_status"
 fi
