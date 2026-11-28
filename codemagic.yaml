@@ -1,0 +1,38 @@
+workflows:
+  swiftui-simulator:
+    name: SwiftUI catalog | Simulator verification
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: '27.2'
+    scripts:
+      - name: Verify Swift package and build iOS Simulator app
+        script: bash swiftui/ci/ios.sh verify
+    artifacts:
+      - swiftui/build/verify/simulator.xcresult.zip
+
+  swiftui-testflight:
+    name: SwiftUI catalog | Signed TestFlight upload
+    instance_type: mac_mini_m2
+    max_build_duration: 35
+    integrations:
+      app_store_connect: cookbook-swiftui-testflight
+    environment:
+      xcode: '27.2'
+      ios_signing:
+        certificates:
+          - cookbook-swiftui-distribution
+        provisioning_profiles:
+          - cookbook-swiftui-app-store
+    scripts:
+      - name: Verify Swift package and create signed archive and IPA
+        script: bash swiftui/ci/ios.sh archive
+    artifacts:
+      - swiftui/build/archive/*.ipa
+      - swiftui/build/archive/SwiftUICatalog.xcarchive.zip
+      - swiftui/build/archive/build-receipt.json
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
