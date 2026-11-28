@@ -14,13 +14,14 @@ enum CatalogGroup: String, CaseIterable, Identifiable {
 enum ConnectionMode: String {
     case local = "端末内"
     case fixture = "再現データ"
+    case localAndFixture = "端末内・再現データ"
     case connected = "実接続"
     case mixed = "実接続・再現データ"
 
     var icon: String {
         switch self {
         case .local: "iphone"
-        case .fixture: "doc.on.doc"
+        case .fixture, .localAndFixture: "doc.on.doc"
         case .connected: "network"
         case .mixed: "arrow.triangle.branch"
         }
@@ -41,34 +42,27 @@ struct CatalogEntry: Identifiable {
     var searchText: String { [title, purpose, group.rawValue, keywords].joined(separator: " ") }
 
     static let all: [Self] = [
-        .init(id: .catalog, group: .discover, title: "診断を試す", purpose: "サンプル利用を記録する", icon: "waveform.path.ecg",
-              mode: .local, description: "テスト操作を記録し、診断タブで件数と共有ファイルを確認します。",
-              requirements: "端末内の保存領域を使います。通信や権限は不要です。", keywords: "ログ JSON")
+        .init(id: .journal, group: .create, title: "思い出を残す", purpose: "日記・写真・音声メモ", icon: "camera",
+              mode: .local, description: "日記に写真や音声を添えて保存し、記録一覧から開き直します。",
+              requirements: "撮影はカメラ、録音はマイクを許可します。写真はシステムの選択画面から追加できます。", keywords: "日記 写真 カメラ 録音 AVFoundation"),
+        .init(id: .studio, group: .create, title: "写真を加工する", purpose: "切り抜き・フィルタ・描画・書き出し", icon: "slider.horizontal.3",
+              mode: .local, description: "写真を編集し、プレビューで結果を確認します。編集を取り消し、完成した画像を共有できます。",
+              requirements: "再現画像か写真選択を使います。処理と書き出しは端末内で行います。", keywords: "創作 写真 画像 加工 編集 Core Image"),
+        .init(id: .playback, group: .create, title: "動画を見る・音を聞く", purpose: "HLS の再生・シーク・再試行", icon: "play.rectangle",
+              mode: .mixed, description: "HLS 動画と端末内の短いテスト音声を再生します。準備完了、最初のフレーム、再バッファを診断で確認できます。",
+              requirements: "HLS には Apple の公開テスト配信と通信が必要です。端末内の音声は通信なしで試せます。", keywords: "動画 音声 HLS AVPlayer AVKit"),
+        .init(id: .spatial, group: .device, title: "遊ぶ・空間に置く", purpose: "ミニゲーム・AR の配置と操作", icon: "arkit",
+              mode: .local, description: "ミニゲームで操作を試し、対応端末では AR で物体を配置して動かします。",
+              requirements: "AR は対応する iPhone とカメラ許可が必要です。ゲームはカメラなしで遊べます。", keywords: "ゲーム AR ARKit RealityKit 追跡"),
     ]
 
     @ViewBuilder var screen: some View {
-        DiagnosticSampleView()
-    }
-}
-
-private struct DiagnosticSampleView: View {
-    @Environment(\.diagnostics) private var diagnostics
-    @State private var result: String?
-
-    var body: some View {
-        List {
-            Section {
-                Button("テスト操作を記録") {
-                    Task {
-                        await diagnostics?.record(sample: .catalog, action: .process, outcome: .success)
-                        result = await diagnostics?.flush() == true
-                            ? "記録しました。診断タブで確認できます。"
-                            : "保存できませんでした。空き容量を確認して再試行してください。"
-                    }
-                }
-                if let result { Text(result).foregroundStyle(.secondary) }
-            }
+        switch id {
+        case .journal: DiarySampleView()
+        case .studio: ImageEditingSampleView()
+        case .playback: PlaybackSampleView()
+        case .spatial: SpatialSampleView()
+        default: DiagnosticsView()
         }
-        .navigationTitle("診断を試す")
     }
 }
