@@ -33,11 +33,13 @@ mkdir -p "$output"
 
 if [[ "$mode" == archive ]]; then
   : "${CATALOG_BUNDLE_ID:?Set the registered bundle ID}"
+  : "${CATALOG_MARKETING_VERSION:?Set the intended marketing version}"
   : "${CATALOG_BUILD_NUMBER:?Set the next unused integer build number}"
   if [[ ! "$CATALOG_BUNDLE_ID" =~ ^([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+$ ||
     "$CATALOG_BUNDLE_ID" == com.example.* ||
+    ! "$CATALOG_MARKETING_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ||
     ! "$CATALOG_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-    echo "Use a registered sample bundle ID and a positive integer build number." >&2
+    echo "Use a registered sample bundle ID, a three-part version, and a positive integer build number." >&2
     exit 2
   fi
   grep -Fq 'com.example.cookbook.swiftui' "$spec"
@@ -143,6 +145,8 @@ with open(info_path, "rb") as file:
 
 if info["CFBundleIdentifier"] != os.environ["CATALOG_BUNDLE_ID"]:
     raise SystemExit("IPA bundle ID mismatch")
+if info["CFBundleShortVersionString"] != os.environ["CATALOG_MARKETING_VERSION"]:
+    raise SystemExit("IPA marketing version mismatch")
 if info["CFBundleVersion"] != os.environ["CATALOG_BUILD_NUMBER"]:
     raise SystemExit("IPA build number mismatch")
 if info["CatalogSourceRevision"] != revision:

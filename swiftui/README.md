@@ -14,7 +14,7 @@ bash swiftui/ci/ios.sh verify
 open swiftui/SwiftUICatalog.xcodeproj
 ```
 
-Linux では `swift test --package-path swiftui/Core` で Foundation の自動テストを実行できます。`bash swiftui/checks/booking/verify.sh` は予約モデルの再試行と入力検証を実行します。iOS のビルドと配信は [配信手順](docs/RELEASE.md)、実行済みの結果と端末の操作手順は [検証記録](docs/VERIFICATION.md) にあります。
+Linux では `swift test --package-path swiftui/Core` で Foundation の自動テストを実行できます。`bash swiftui/checks/booking/verify.sh` は予約モデルの再試行と入力検証を実行します。TestFlight は GitHub Actions またはローカルコマンドから、署名・アップロード、処理確認、内部テスターへの配布を順に進められます。設定とコマンドは [配信手順](docs/RELEASE.md)、実行済みの結果と端末の操作手順は [検証記録](docs/VERIFICATION.md) にあります。
 
 ## 用途からコードを読む
 

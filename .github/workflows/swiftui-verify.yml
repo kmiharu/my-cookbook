@@ -8,6 +8,8 @@ on:
       - swiftui/checks/**
       - swiftui/project.yml
       - swiftui/ci/ios.sh
+      - swiftui/ci/testflight.py
+      - .github/workflows/swiftui-testflight.yml
       - .github/workflows/swiftui-verify.yml
   workflow_dispatch:
 
@@ -22,6 +24,8 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - name: Verify TestFlight release orchestration
+        run: python3 -m unittest discover -s swiftui/checks/testflight
       - name: Verify Swift package and build iOS Simulator app
         env:
           DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer

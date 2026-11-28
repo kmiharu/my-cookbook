@@ -28,80 +28,62 @@
 
 `swiftui/project.yml` の `com.example.cookbook.swiftui` はSimulator用の仮ID。配信用スクリプトは登録済みの `CATALOG_BUNDLE_ID` を一時的なプロジェクト設定に入れ、証明書とプロファイルを適用する。Codemagic APIトークンとAppleの秘密鍵は、運用環境の秘密管理から取得する。GitHubでAPIを操作する場合も、公開リポジトリの成果物や環境設定値に秘密値を保存しない。
 
-## 確定したコミットをビルドする
+## GitHub ActionsからTestFlightの配信を進める
 
-1. GitHubの変更ブランチまたはタグと、その完全なコミットSHAを確定する。macOSでの再現はリポジトリ直下から `bash swiftui/ci/ios.sh verify` を実行する。GitHub Actions の push 検証では Core と予約の検査、iPhone 17 Simulator コンパイル、実機 SDK の署名なし Release アーカイブを確認する。手動実行の `workflow_dispatch` は Simulator の起動と画像も検証する。macOS では `CATALOG_UNSIGNED_ARCHIVE=1 CATALOG_SIMULATOR_SMOKE=1 bash swiftui/ci/ios.sh verify` で同じ条件を再現できる。
-2. Codemagicでは `swiftui-simulator` がCoreテストとSimulatorコンパイル、`swiftui-testflight` がCoreテストと署名済みIPAの作成・アップロードを行う。配信時は対象バージョンの登録済みビルド番号をApple側で照会し、次に利用する整数の番号を選ぶ。
-3. CodemagicのアプリIDと実行中のビルドを確認する。GitHub上のSHAをAPI overrideとして渡し、実行時のcheckoutと照合する。参照するブランチが起動の前後に進んだ場合はビルドを中止する。必要に応じてAPIの `branch` を `tag` に替える。
+[SwiftUI TestFlight](../../.github/workflows/swiftui-testflight.yml) は手動実行専用。既定ブランチへワークフローを取り込んだ後に実行できる。ワークフロー自身は信頼済みのブランチから実行し、配信するコードは入力で別途指定する。並行起動を避けるため、このアプリの配信操作はGitHub Actions内で直列化する。
 
-以下はBash、curl、jqを使う例。環境変数は運用環境で設定する。2026-11-28に公式v3スキーマを取得し、認証ヘッダー名と下記の要求・応答構造を確認した。CodemagicとApp Store Connectの専用MCPはこの作業環境のツール一覧で確認できなかった。[Builds API](https://docs.codemagic.io/rest-api/builds/)、[v3 OpenAPI](https://codemagic.io/api/v3/schema/openapi.json)
+GitHubの専用Environment `swiftui-testflight` に次を設定する。Codemagicへ連携する署名・アップロード用の資格情報と、ここでApple APIを呼ぶための資格情報は、各サービスの秘密管理で扱う。
 
-```bash
-set -o pipefail
-cm() {
-  curl --silent --show-error --fail --max-time 30 \
-    --header @<(printf 'x-auth-token: %s\n' "$CODEMAGIC_API_TOKEN") "$@"
-}
-api=https://codemagic.io/api/v3
+| 設定 | 名前と用途 |
+| --- | --- |
+| Environment secrets | `CODEMAGIC_API_TOKEN`、`ASC_PRIVATE_KEY`。AppleのチームAPIキーの未加工の `.p8` を後者に設定する。 |
+| Environment variables | `CODEMAGIC_TEAM_ID`、`CODEMAGIC_APP_ID`、`ASC_APP_ID`、`ASC_BETA_GROUP_ID`、`CATALOG_BUNDLE_ID`、`ASC_KEY_ID`、`ASC_ISSUER_ID`。CodemagicのチームAPIで対象リポジトリとの一致を確認する。 |
+| Apple側 | カタログ専用の内部テスターグループを手動選択方式で設定し、対象テスターを登録する。アプリに自動配信グループがある場合は、意図しない配布を防ぐためワークフローが停止する。 |
 
-# 使用するアプリと直近のビルドIDを確認する。複数ページは page を指定する。
-cm "$api/user/apps" | jq '{current_page,total_pages,data:[.data[]|{id,name,archived,last_build_id}]}'
-cm --get "$api/teams/$CODEMAGIC_TEAM_ID/builds" --data-urlencode "app_id=$CODEMAGIC_APP_ID" \
-  | jq '{cursor,data:[.data[]|{id,status,branch,tag,sha:.commit.hash,workflow:.workflow.id}]}'
+1. `start` に配信元の完全なref、SHA、バージョン、未使用のビルド番号を渡す。GitHubの実ref、Codemagicのリポジトリ、Appleのアプリと内部グループを照合してから署名・アップロードを起動する。実行結果に出る `codemagicBuildID` を控える。バージョンは配信する `swiftui/project.yml` の値と揃える。
+2. `status` に同じSHA、バージョン、ビルド番号と `codemagicBuildID` を渡す。必要なら `wait_seconds` で待機する。Codemagicのビルド、アップロード、Apple側の処理、内部テストの状態を別々に確認する。
+3. `ready_to_distribute` を確認し、同じ情報で `distribute` を実行する。Apple側の関連付けを再照会する。 `group_assigned` はグループへの追加済み。 `available_for_internal_testing` はAppleが内部テスト中と報告した状態。端末へのインストールは別途確認する。
 
-# 署名なしの起動例。ブランチ名と完全なSHAを別々に渡す。
-body=$(jq -n --arg ref "$CATALOG_GIT_REF" --arg sha "$CATALOG_EXPECTED_SHA" '{
-  workflow_id:"swiftui-simulator",branch:$ref,environment:{variables:{CATALOG_EXPECTED_SHA:$sha}}
-}')
-cm --request POST --header 'Content-Type: application/json' --data-binary "$body" \
-  "$api/apps/$CODEMAGIC_APP_ID/builds" | jq -er '.data.id'
-
-# TestFlightアップロード用。上のSimulator用POSTから置き換えて使用する。
-body=$(jq -n --arg ref "$CATALOG_GIT_REF" --arg sha "$CATALOG_EXPECTED_SHA" \
-  --arg bundle "$CATALOG_BUNDLE_ID" --arg number "$CATALOG_BUILD_NUMBER" '{
-  workflow_id:"swiftui-testflight",branch:$ref,
-  environment:{variables:{CATALOG_EXPECTED_SHA:$sha,CATALOG_BUNDLE_ID:$bundle,CATALOG_BUILD_NUMBER:$number}}
-}')
-cm --request POST --header 'Content-Type: application/json' --data-binary "$body" \
-  "$api/apps/$CODEMAGIC_APP_ID/builds" | jq -er '.data.id'
-
-# POSTが返したIDを記録してから照会する。
-cm "$api/builds/$CODEMAGIC_BUILD_ID" | jq '.data | {
-  id,app_id,workflow,status,sha:.commit.hash,app_store_connect_status,
-  artifacts:[.artifacts[]|{name,type,size_in_bytes}]}'
-cm "$api/builds/$CODEMAGIC_BUILD_ID/actions?page_size=100&page=1" \
-  | jq '{current_page,total_pages,data:[.data[]|{type,status,has_test_results}]}'
-```
-
-成功判定ではApp ID、workflow、checkout SHA、必須ステップの成功を照合する。POSTの結果がタイムアウトなどで不明なときは、起動時刻と同じブランチ・workflowのビルドをAPIで確認し、見つかったIDを照会する。同じ要求を再送するとビルドが重複し得る。個人アカウントでチーム一覧を利用できない場合は `user/apps` の `last_build_id` と該当ビルドを照会する。結果の照会は再ビルドを必要としない。
-
-調査用成果物はSimulatorの `simulator.xcresult.zip`、配信用の `.ipa`、dSYMを含む `SwiftUICatalog.xcarchive.zip`、`build-receipt.json`。保護された保管先に必要なものを保存する。Codemagicの公開v3スキーマはビルドステップと成果物を取得できるが、生ログ取得用のエンドポイントは掲載していない。Codemagic側のステップログとApple側の検証結果は別の記録として扱う。
-
-## Apple側の処理を確認して対象グループへ配布する
-
-1. Codemagicの公開処理ステップでアップロード成功を確認する。`build-receipt.json` のBundle ID、バージョン、ビルド番号を控える。
-2. 専用App IDから `GET /v1/builds` を照会する。`filter[app]`、`filter[version]`（ビルド番号）、`filter[preReleaseVersion.version]`（バージョン）で絞り込み、該当するAppleビルドIDと `processingState` を確認する。Apple側の処理完了は `VALID` で判定する。処理失敗や輸出コンプライアンスの保留がある場合は、その状態とAppleからの通知を記録する。暗号化に関する申告は使用状況とAppleの質問に基づいて判断する。[List builds](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds)、[ビルドのステータス](https://developer.apple.com/help/app-store-connect/reference/app-uploads/app-build-statuses/)、[輸出コンプライアンス](https://developer.apple.com/help/app-store-connect/manage-app-information/overview-of-export-compliance/)
-3. `GET /v1/apps/{appId}/betaGroups` でカタログ専用グループを照合する。内部テスター向けなら `isInternalGroup` が true であることを確認する。その `POST /v1/betaGroups/{groupId}/relationships/builds` に `{"data":[{"type":"builds","id":"APPLE_BUILD_ID"}]}` を送ってビルドを追加し、`GET /v1/betaGroups/{groupId}/builds` で反映を確認する。App Store Connect APIはAppleの手順に従って短命JWTで認証する。公開リンクや外部配布を選ぶ場合は、Apple側で該当ビルドのBeta App Reviewが完了していることを確認する。[Apple API認証](https://developer.apple.com/documentation/appstoreconnectapi/generating-tokens-for-api-requests)、[ビルドをグループに追加](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-betagroups-_id_-relationships-builds)、[Beta App Review](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-betaappreviewsubmissions)
-4. `GET /v1/builds/{buildId}/buildBetaDetail` と対象グループのテスターを照合する。配信済みの記録には対象グループと配信日時を残す。TestFlightに表示されることと端末で起動できることは、インストール後に別々に確認する。[Build Beta Details](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds-_id_-buildbetadetail)
-
-Codemagic YAMLの `submit_to_testflight` は、対象グループを上記の手順で選ぶため `false`。署名済みIPAのApp Store Connectアップロードは有効。既存グループで「自動配信」が設定されている場合は、アップロード前に専用アプリの対象グループと配信範囲を照合する。今回の配信操作はTestFlightまで。
-
-以下は配信前の照会例。JWTはAppleの手順に沿って生成し、`ASC_JWT` に一時的に渡す。
+GitHub CLIでの起動例。 `WORKFLOW_REF` は配信ワークフローを取り込んだ信頼済みブランチ、 `RELEASE_REF` は配信するブランチまたはタグの完全ref。
 
 ```bash
-asc() {
-  curl --silent --show-error --fail --max-time 30 \
-    --header @<(printf 'Authorization: Bearer %s\n' "$ASC_JWT") "$@"
-}
-apple=https://api.appstoreconnect.apple.com/v1
-asc --get "$apple/builds" \
-  --data-urlencode "filter[app]=$ASC_APP_ID" \
-  --data-urlencode "filter[preReleaseVersion.version]=$CATALOG_MARKETING_VERSION" \
-  | jq '[.data[]|{id,number:.attributes.version,state:.attributes.processingState}]'
-asc "$apple/apps/$ASC_APP_ID/betaGroups" \
-  | jq '[.data[]|{id,name:.attributes.name,internal:.attributes.isInternalGroup,
-    allBuilds:.attributes.hasAccessToAllBuilds,publicLink:.attributes.publicLinkEnabled}]'
+gh workflow run swiftui-testflight.yml --ref "$WORKFLOW_REF" \
+  -f operation=start -f ref="$RELEASE_REF" -f sha="$RELEASE_SHA" \
+  -f version="$VERSION" -f build_number="$BUILD_NUMBER"
+
+gh workflow run swiftui-testflight.yml --ref "$WORKFLOW_REF" \
+  -f operation=status -f sha="$RELEASE_SHA" -f version="$VERSION" \
+  -f build_number="$BUILD_NUMBER" -f codemagic_build_id="$CODEMAGIC_BUILD_ID" -f wait_seconds=1800
+
+gh workflow run swiftui-testflight.yml --ref "$WORKFLOW_REF" \
+  -f operation=distribute -f sha="$RELEASE_SHA" -f version="$VERSION" \
+  -f build_number="$BUILD_NUMBER" -f codemagic_build_id="$CODEMAGIC_BUILD_ID"
 ```
+
+## ローカルから同じ配信コマンドを使う
+
+Python 3.10以上、Git、OpenSSLを使う。Environment variablesと同じ環境変数を設定し、 `CODEMAGIC_API_TOKEN` を秘密管理から渡す。 `ASC_KEY_PATH` に秘密管理から取得したチームAPIキーの `.p8` ファイルを指定する。スクリプトはOpenSSLで短命JWTを生成し、処理待ち中に更新する。秘密値、APIの生レスポンス、署名付き成果物URLは出力しない。
+
+```bash
+python3 swiftui/ci/testflight.py start --ref "$RELEASE_REF" --sha "$RELEASE_SHA" \
+  --version "$VERSION" --build-number "$BUILD_NUMBER"
+
+python3 swiftui/ci/testflight.py status --sha "$RELEASE_SHA" \
+  --version "$VERSION" --build-number "$BUILD_NUMBER" \
+  --codemagic-build-id "$CODEMAGIC_BUILD_ID" --wait 1800
+
+python3 swiftui/ci/testflight.py distribute --sha "$RELEASE_SHA" \
+  --version "$VERSION" --build-number "$BUILD_NUMBER" --codemagic-build-id "$CODEMAGIC_BUILD_ID"
+```
+
+- `start` が返答を受け取れなかった場合は、出力に示したリリースラベルでCodemagicのチームビルドを検索し、ビルドIDを取得して `status` を使う。起動要求の自動再送は行わない。同じ版・ビルド番号の既存ビルドを見つけた場合も、このビルドIDから再開する。一度失敗した配信用ビルドの再ビルドは次の番号を使う。配信の起動を直列化する場合はGitHub Actionsに集約する。
+- `status` の待機上限は3600秒。待機時間切れは終了コード3、明確な失敗やApple側の保留は1。 `apple_blocked` の場合は `internalBetaState` を確認し、必要な暗号化申告などをApple側で済ませてから再照会する。
+- `distribute` は対象ビルドの関連付けがある場合に同じ追加を送らない。返答が不明な場合もAppleの関連付けを読み直す。再実行時は照会から始まるため、ビルドを作り直す必要はない。
+- CodemagicはIPA、dSYM付きアーカイブ、 `build-receipt.json` を作成する。配信コマンドの結果と一緒にGit SHA、CodemagicビルドID、バージョン、ビルド番号、AppleビルドID、対象グループを保管する。
+
+GitHub Actionsのpush検証は、Coreと予約の検査、iPhone 17 Simulatorコンパイル、実機SDKの署名なしReleaseアーカイブを実行する。Simulator起動を含むmacOSでの再現は `CATALOG_UNSIGNED_ARCHIVE=1 CATALOG_SIMULATOR_SMOKE=1 bash swiftui/ci/ios.sh verify`。Codemagicの署名なし検証は `swiftui-simulator` ワークフローに完全SHAを渡して起動する。
+
+Codemagicの `swiftui-testflight` はIPAをApp Store Connectへアップロードする。対象グループの追加は配信コマンドで行うため、YAMLの `submit_to_testflight` は `false`。その運用ではCodemagicのApple処理状況が空の場合があるため、コマンドは必要に応じてCodemagicの配信ステップを確認し、Apple側でアプリ・iOS・バージョン・ビルド番号を照合する。 [Codemagic REST v3](https://codemagic.io/api/v3/schema/openapi.json) · [Publishing to App Store Connect](https://docs.codemagic.io/yaml-publishing/app-store-connect/) · [Apple API認証](https://developer.apple.com/documentation/appstoreconnectapi/generating-tokens-for-api-requests) · [List builds](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds) · [Build Beta Details](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds-_id_-buildbetadetail) · [対象グループにビルドを追加](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-betagroups-_id_-relationships-builds)
 
 ## iPhoneでインストールして診断を書き出す
 
